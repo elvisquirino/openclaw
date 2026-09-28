@@ -4,6 +4,7 @@ import {
   resolveSubagentController,
 } from "../agents/subagents/registry/subagent-control-scope.js";
 import { getLatestLiveSubagentRunByChildSessionKey } from "../agents/subagents/registry/subagent-registry-read.js";
+import { adoptPausedSubagentRunForFollowUp } from "../agents/subagents/registry/subagent-registry.js";
 import type { SubagentRunRecord } from "../agents/subagents/registry/subagent-registry.types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { TrustedSubagentResume } from "./in-process-subagent-resume.js";
@@ -157,14 +158,13 @@ export async function prepareParentSubagentResume(params: {
   onAdopted?: (entry: SubagentRunRecord) => void;
   gatewayContextResolver?: GatewayContextResolver;
 }): Promise<() => Promise<string>> {
-  const runtime = await import("../agents/subagents/registry/subagent-registry.js");
   return async () => {
     params.assertAdmissionCurrent();
     const expected = assertParentSubagentResumeCurrent({
       ...params,
       sessionId: params.getSessionId(),
     });
-    const adopted = await runtime.adoptPausedSubagentRunForFollowUp({
+    const adopted = await adoptPausedSubagentRunForFollowUp({
       childSessionKey: params.resume.childSessionKey,
       runId: params.runId,
       task: params.task,

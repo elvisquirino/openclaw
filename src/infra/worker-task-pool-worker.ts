@@ -37,7 +37,7 @@ export function postWorkerTaskInput<Input, Output>(
 }
 
 export const prepareWorkerTaskResources = createLazyRuntimeModule(
-  () => import("./temp-artifact-cleanup.js"),
+  () => import("./temp-artifact-removal.js"),
 );
 
 /** Physical construction and listeners share the pool's detached creation scope. */

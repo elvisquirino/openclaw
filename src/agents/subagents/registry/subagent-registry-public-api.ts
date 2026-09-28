@@ -6,6 +6,7 @@ import {
   planAgentSteeringRelease,
 } from "../../agent-steering-queue.js";
 import { captureGatewayToolCallerAssertion } from "../../tools/gateway-caller-context.js";
+import { readSubagentRunAnnounceResult } from "../announce/subagent-announce-output.js";
 import { prepareRequesterCronAuthority } from "../requester-cron-authority.js";
 import type { SubagentLifecycleController } from "./subagent-registry-lifecycle.js";
 import { getSubagentRunsForChildSession } from "./subagent-registry-memory.js";
@@ -52,11 +53,7 @@ export function createSubagentRegistryPublicApi(config: {
     const prepared = await preparePendingAgentSteeringLease({
       ...params,
       runs,
-      readResult: async (entry) => {
-        const { readSubagentRunAnnounceResult } =
-          await import("../announce/subagent-announce-output.js");
-        return readSubagentRunAnnounceResult(entry, (runId) => runs.get(runId));
-      },
+      readResult: (entry) => readSubagentRunAnnounceResult(entry, (runId) => runs.get(runId)),
     });
     if (!prepared) {
       return undefined;

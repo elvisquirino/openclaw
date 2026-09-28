@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { root as fsRoot } from "../infra/fs-safe.js";
+import { prepareSkillBundle } from "../skills/library/bundle.js";
 import { resolveSkillFileHost } from "../skills/loading/skill-file-host.js";
 import {
   resolveSkillReadPath,
@@ -144,7 +145,6 @@ function wrapWorkspaceSkillRead(
             if (sourcePath === skill.filePath) {
               return Buffer.from(await reader.readInstructions(skill.filePath, { signal: active }));
             }
-            const { prepareSkillBundle } = await import("../skills/library/bundle.js");
             const files = await reader.readSkillFiles(skill, { allowMissingRoot: false });
             active.throwIfAborted();
             const relative = relativePathInsideSandboxRoot(skill.baseDir, sourcePath)!;

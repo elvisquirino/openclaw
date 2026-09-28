@@ -1,8 +1,8 @@
 import { resolveIntegerOption } from "@openclaw/normalization-core/number-coercion";
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import type {
+  SessionTranscriptMessageEvent,
   SessionTranscriptReadScope,
-  TranscriptEvent,
 } from "../config/sessions/session-accessor.sqlite-contract.js";
 import { resolveVisibleHistoryEventCount } from "../config/sessions/session-accessor.sqlite-history-projection.js";
 import {
@@ -13,32 +13,32 @@ import {
   readSessionTranscriptHistoryEventPageFromProjection,
   readSessionTranscriptHistoryEventsFromProjection,
   readSessionTranscriptHistoryAnchorPageFromProjection,
-  type SessionTranscriptMessageByIdOptions,
 } from "../config/sessions/session-accessor.sqlite-history-query.js";
-import type {
-  CurrentTranscriptProjection,
-  SessionTranscriptMessageEvent,
-} from "../config/sessions/session-accessor.sqlite-projection-read.js";
+import type { CurrentTranscriptProjection } from "../config/sessions/session-accessor.sqlite-projection-read.js";
 import {
   iterateVisibleMessageRange,
   resolveVisibleMessagePositions,
 } from "../config/sessions/session-accessor.sqlite-reset-window.js";
+import type {
+  ReadRecentSessionMessagesOptions,
+  ReadRecentSessionMessagesResult,
+  ReadSessionMessageByIdResult,
+  ReadSessionMessagesAroundIdResult,
+  ReadSessionMessagesAsyncOptions,
+  ReadSessionMessagesResult,
+  SessionTranscriptMessageByIdOptions,
+  SessionTranscriptPageOptions,
+  SessionTranscriptReadOptions,
+} from "../config/sessions/session-history-types.js";
 import { SessionTranscriptStorageUnavailableError } from "../config/sessions/session-transcript-projection-error.js";
 import { jsonUtf8Bytes } from "../infra/json-utf8-bytes.js";
-import type {
-  TranscriptRecentReadLimits,
-  TranscriptAnchorPageOptions,
-} from "../sessions/transcript-anchor-page.js";
+import type { TranscriptAnchorPageOptions } from "../sessions/transcript-anchor-page.js";
 import type {
   TranscriptReadWindow,
   TranscriptReadWindowOptions,
 } from "../sessions/transcript-read-window.js";
 import type { SubagentCoordinationDisplayResolver } from "./chat-display-projection.history.js";
-import {
-  ArchivedTranscriptReader,
-  type ReadRecentSessionMessagesOptions,
-  type ReadSessionMessagesAsyncOptions,
-} from "./session-transcript-archive-reader.js";
+import { ArchivedTranscriptReader } from "./session-transcript-archive-reader.js";
 import { sqliteMessageEventWithSeq } from "./session-transcript-entry-message.js";
 import type { ResolvedTranscriptReadTarget } from "./session-transcript-read-target.js";
 import {
@@ -54,39 +54,6 @@ export type SessionTranscriptReadAccess = {
     read: (projection: CurrentTranscriptProjection) => T,
     options?: { readOnly?: boolean },
   ) => Promise<T>;
-};
-
-export type ReadRecentSessionMessagesResult = {
-  olderOffset?: number;
-  omittedOversized?: boolean;
-  activeLeafEntryId?: string | null;
-  deltaCursor?: string;
-  displaySource?: string;
-  readWindow?: TranscriptReadWindow;
-  windowReset?: boolean;
-  messages: unknown[];
-  transcriptEvents?: TranscriptEvent[];
-  transcriptPath?: string;
-  transcriptSource?: "active" | "reset-archive";
-  totalMessages: number;
-};
-
-export type ReadSessionMessagesResult = {
-  messages: unknown[];
-  transcriptPath?: string;
-};
-
-export type ReadSessionMessageByIdResult = {
-  message?: unknown;
-  seq?: number;
-  oversized: boolean;
-  found: boolean;
-  serializedBytes?: number;
-};
-
-type SessionTranscriptReadOptions = {
-  allowResetArchiveFallback?: boolean;
-  readOnly?: boolean;
 };
 
 function archivedTranscriptReader(target: ResolvedTranscriptReadTarget): ArchivedTranscriptReader {
@@ -170,12 +137,6 @@ function readRecentSqliteMessageRecords(
     totalMessages: page.totalMessages,
   };
 }
-
-export type ReadSessionMessagesAroundIdResult = ReadRecentSessionMessagesResult & {
-  found: boolean;
-  hasOverreadContext: boolean;
-  offset: number;
-};
 
 function visitProjectionMessages(
   projection: CurrentTranscriptProjection,
@@ -355,15 +316,7 @@ export function createSessionTranscriptReader(access: SessionTranscriptReadAcces
 
   async function readSessionMessagesPageWithStatsAsync(
     scope: SessionTranscriptReadScope,
-    opts: TranscriptReadWindowOptions &
-      SessionTranscriptReadOptions & {
-        offset: number;
-        maxMessages: number;
-        beforeSeq?: number;
-        recentAtHead?: TranscriptRecentReadLimits;
-        maxBytes?: number;
-        allowOversizedFirst?: boolean;
-      },
+    opts: SessionTranscriptPageOptions,
   ): Promise<ReadRecentSessionMessagesResult> {
     const target = await access.resolveTarget(scope);
     const page = await readSnapshotIfPresent(
