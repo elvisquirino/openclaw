@@ -199,12 +199,12 @@ export const sessionsGitHubHandlers: GatewayRequestHandlers = {
       let personal = action ? await service!.status(action) : null;
       const session = read.currentSession();
       const pendingPersonal = action ? await coordinator.personalPending(action, session) : null;
-      read.currentSession();
+      read.assertSessionUnchanged();
       if (action && personal) {
         personal = service!.revalidateStatus(action, personal);
       }
       const latestShared = await coordinator.latestShared(session, options.params.idempotencyKey);
-      read.currentSession();
+      read.assertSessionUnchanged();
       if (action && personal) {
         personal = service!.revalidateStatus(action, personal);
       }
@@ -232,7 +232,7 @@ export const sessionsGitHubHandlers: GatewayRequestHandlers = {
       const session = read.currentSession();
       const shared = await service.sharedStatus(session, options.params.requestId);
       if (shared) {
-        read.currentSession();
+        read.assertSessionUnchanged();
         options.respond(true, shared);
         return;
       }
@@ -245,7 +245,7 @@ export const sessionsGitHubHandlers: GatewayRequestHandlers = {
         options.params.requestId,
         prepared,
       );
-      read.currentSession();
+      read.assertSessionUnchanged();
       options.respond(true, result);
     },
   ),

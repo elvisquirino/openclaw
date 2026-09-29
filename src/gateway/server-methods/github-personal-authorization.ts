@@ -139,19 +139,39 @@ export function prepareGitHubPublicationOptionsRead(
   if (!session) {
     throw new Error("GitHub publication session was not found.");
   }
+  // sessionId/lifecycleRevision pin the incarnation; archivedAt is re-read below because
+  // archiving flips it without touching either identity field.
+  let latest = session;
+  const readCurrent = () => {
+    const current = readSession(session.sessionKey, session.agentId);
+    if (
+      !current ||
+      current.sessionId !== session.sessionId ||
+      current.lifecycleRevision !== session.lifecycleRevision
+    ) {
+      throw new Error("GitHub publication session access changed; select the session again.");
+    }
+    return current;
+  };
   return {
     personal,
     session,
+    // Awaited options work can straddle an archive or restore, so project from the live
+    // row rather than the request-start snapshot: an archive retires the confirmation the
+    // confirm action would reject, and a restore revives it.
     currentSession: () => {
-      const current = readSession(session.sessionKey, session.agentId);
-      if (
-        !current ||
-        current.sessionId !== session.sessionId ||
-        current.lifecycleRevision !== session.lifecycleRevision
-      ) {
+      latest = readCurrent();
+      return latest;
+    },
+    // After awaited work that consumed the last refresh, prove no archive or restore
+    // landed in between so the response matches the state checked before it is sent.
+    assertSessionUnchanged: () => {
+      const current = readCurrent();
+      if ((current.archivedAt ?? null) !== (latest.archivedAt ?? null)) {
         throw new Error("GitHub publication session access changed; select the session again.");
       }
-      return session;
+      latest = current;
+      return current;
     },
   };
 }

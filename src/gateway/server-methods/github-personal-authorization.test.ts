@@ -65,6 +65,13 @@ function sessionRead(agentId = "main") {
   };
 }
 
+function archivedSessionRead(archivedAt: number) {
+  return {
+    ...sessionRead(),
+    entry: { sessionId: "session-cache-test", updatedAt: 1, archivedAt },
+  };
+}
+
 describe("GitHub publication request discovery", () => {
   beforeEach(() => {
     mocks.loadSession.mockReset();
@@ -95,6 +102,32 @@ describe("GitHub publication request discovery", () => {
       });
     },
   );
+
+  it("refreshes archivedAt on each projection read and rejects a flip before the response", () => {
+    mocks.loadSession.mockReturnValue(sessionRead());
+    const read = prepareGitHubPublicationOptionsRead(createRequest(), { sessionKey: "main" });
+    expect(read.currentSession()).toMatchObject({ archivedAt: null });
+    // An archive landing during awaited options work flips archivedAt without touching
+    // sessionId/lifecycleRevision; the next projection refresh must pick it up.
+    mocks.loadSession.mockReturnValue(archivedSessionRead(123));
+    expect(read.currentSession()).toMatchObject({ archivedAt: 123 });
+    expect(read.assertSessionUnchanged()).toMatchObject({ archivedAt: 123 });
+    // A restore between the projection refresh and the response invalidates that response.
+    mocks.loadSession.mockReturnValue(sessionRead());
+    expect(() => read.assertSessionUnchanged()).toThrow(
+      "GitHub publication session access changed; select the session again.",
+    );
+  });
+
+  it("revives a restored session on the projection refresh instead of reporting it changed", () => {
+    mocks.loadSession.mockReturnValue(archivedSessionRead(456));
+    const read = prepareGitHubPublicationOptionsRead(createRequest(), { sessionKey: "main" });
+    expect(read.session).toMatchObject({ archivedAt: 456 });
+    // A restore landing during awaited options work must clear the projected archive state.
+    mocks.loadSession.mockReturnValue(sessionRead());
+    expect(read.currentSession()).toMatchObject({ archivedAt: null });
+    expect(read.assertSessionUnchanged()).toMatchObject({ archivedAt: null });
+  });
 
   it.each([undefined, "research"])(
     "shares store discovery across every personal session authority re-read for %s",
