@@ -1,4 +1,3 @@
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { patchSessionEntryCore } from "../config/sessions/session-accessor.js";
 import { ensurePersonalGitHubPublicationSchema } from "../state/openclaw-state-db-schema-additive.js";
@@ -22,7 +21,6 @@ import {
   githubPublicationTestMocks,
   installGitHubPublicationTestHarness,
   persistPublicationTestSession,
-  root,
 } from "./github-publication.test-support.js";
 import { resolveGatewayOperatorAccessAuthority } from "./operator-access-policy.js";
 import { preparePersonalGitHubSessionAction } from "./server-methods/github-personal-authorization.js";
@@ -358,10 +356,11 @@ describe("personal publication definitive outcomes", () => {
     });
     // Archiving preserves sessionId/lifecycleRevision, so only an explicit archivedAt
     // check can retire the pending confirmation the archived confirm action would reject.
-    await patchSessionEntryCore(
-      { agentId: "main", sessionKey: SESSION_KEY, storePath: path.join(root, "sessions.json") },
-      () => ({ archivedAt: Date.now() }),
-    );
+    // The scope omits storePath: the fixture persists through the resolved agent store, and
+    // a custom locator would resolve a different SQLite file and silently no-op the patch.
+    await patchSessionEntryCore({ agentId: "main", sessionKey: SESSION_KEY }, () => ({
+      archivedAt: Date.now(),
+    }));
     const discovered = await rpc("sessions.github.status", {
       sessionKey: SESSION_KEY,
       requestId: row.request_id,
