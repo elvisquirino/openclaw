@@ -41,6 +41,8 @@ import type { GatewayRequestHandler, RespondFn } from "./types.js";
 const chatSend = vi.hoisted(() => vi.fn<GatewayRequestHandler>());
 vi.mock("./chat-send-external-entry.js", () => ({ handleDirectExternalChatSend: chatSend }));
 
+const { useSubagentControlFixture } =
+  await import("../../agents/subagents/registry/subagent-control.test-support.js");
 const fixture = useSubagentControlFixture();
 afterEach(() => {
   requesterAuthority.revokeRequesterCronAuthority("agent:main:main");
