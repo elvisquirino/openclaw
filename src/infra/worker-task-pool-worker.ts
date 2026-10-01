@@ -1,7 +1,7 @@
 import type { Transferable } from "node:worker_threads";
-import { createLazyRuntimeModule } from "../shared/lazy-runtime.js";
 import { captureDeletedAgentDatabaseFences } from "./agent-database-readers.js";
 import { resolveRuntimeWorkerThreadExecArgv } from "./runtime-worker-url.js";
+import { removeTemporaryArtifacts } from "./temp-artifact-removal.js";
 import { createCpuTrackedWorker, receiveWorkerMemoryPort } from "./worker-cpu.js";
 import {
   createRetainedNativeWorker,
@@ -36,10 +36,6 @@ export function postWorkerTaskInput<Input, Output>(
   task.transferMs += performance.now() - transferStartedAt;
 }
 
-export const prepareWorkerTaskResources = createLazyRuntimeModule(
-  () => import("./temp-artifact-removal.js"),
-);
-
 /** Physical construction and listeners share the pool's detached creation scope. */
 export function createWorkerTaskPoolWorker<Input, Output>(params: {
   slot: Slot<Input, Output>;
@@ -60,11 +56,10 @@ export function createWorkerTaskPoolWorker<Input, Output>(params: {
     slot.releaseResources = prepared?.releaseResources;
     const temporaryDirectory = prepared?.temporaryDirectory;
     if (temporaryDirectory) {
-      const cleanup = prepareWorkerTaskResources();
       const releaseResources = slot.releaseResources;
       slot.releaseResources = async () => {
         try {
-          const { removeTemporaryArtifacts } = await cleanup;
+          // Loaded with the pool so an in-place update cannot strand retirement.
           await removeTemporaryArtifacts(temporaryDirectory, "Worker task");
         } finally {
           await releaseResources?.();
