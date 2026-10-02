@@ -12,6 +12,7 @@ import { createRef, ref } from "lit/directives/ref.js";
 import { applicationContext, type ApplicationContext } from "../app/context.ts";
 import { navigateMcpAppLink } from "../app/mcp-app-routing.ts";
 import { I18nController, t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import { parseMcpAppLink } from "../lib/mcp-app-route.ts";
 import { openExternalUrlSafe } from "../lib/open-external-url.ts";
@@ -30,6 +31,8 @@ import {
 } from "./mcp-app-security.ts";
 import { collectMcpAppStyleVariables } from "./mcp-app-theme.ts";
 import { promoteToPopoverTopLayer } from "./menu-surface.ts";
+
+registerMcpAppEnglish();
 
 type McpAppViewPayload = {
   sandboxUrl: string;

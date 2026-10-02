@@ -15,6 +15,7 @@ import {
   type WidgetPromptEventDetail,
 } from "../../components/mcp-app-security.ts";
 import { t } from "../../i18n/index.ts";
+import { registerMcpAppEnglish } from "../../i18n/locales/en-mcp-app.ts";
 import { publishMcpAppContext } from "../../lib/mcp-app-context.ts";
 import { mcpAppMessageInput, sendMcpAppNewConversation } from "../../lib/mcp-app-message.ts";
 import { uploadsEnabled } from "../../lib/uploads.ts";
@@ -30,6 +31,8 @@ import {
   chatAttachmentBatchBytes,
 } from "./components/chat-attachment-admission.ts";
 import { encodeTextAsDataUrl } from "./components/chat-attachment-text.ts";
+
+registerMcpAppEnglish();
 
 // These are host-created DOM events. The sandbox bridge and catalog producers own
 // their payloads; the handlers below still check the receiving pane and live client.

@@ -13,6 +13,7 @@ import { shellLayoutTraits } from "../../app/shell-layout-traits.ts";
 import type { McpAppOpenDetail } from "../../components/mcp-app-launch.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
+import { registerMcpAppEnglish } from "../../i18n/locales/en-mcp-app.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import { McpAppCatalogController } from "../../lib/mcp-app-catalog.ts";
 import { mcpAppRouteFromSearch, resolveMcpAppRouteServer } from "../../lib/mcp-app-route.ts";
@@ -21,6 +22,8 @@ import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import "../../components/mcp-app-catalog.ts";
 import { buildMacGatewayLaunchUrl } from "./gateway-launch.ts";
 import { renderApps } from "./view.ts";
+
+registerMcpAppEnglish();
 
 class AppsPage extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true })

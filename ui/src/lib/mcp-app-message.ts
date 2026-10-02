@@ -3,6 +3,7 @@ import type { ApplicationContext } from "../app/context.ts";
 import { gatewayPresentationScope } from "../app/gateway-presentation-scope.ts";
 import type { McpAppMessageEventDetail } from "../components/mcp-app-security.ts";
 import { t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
 import { buildChatApiAttachments } from "../pages/chat/attachment-api.ts";
 import {
   releaseChatAttachmentPayloads,
@@ -20,6 +21,8 @@ import { StartedSessionNavigation } from "../pages/new-session/started-session-n
 import type { ChatAttachment } from "./chat/chat-types.ts";
 import { mcpAppMessageText } from "./mcp-app-message-content.ts";
 import { uploadsEnabled, uploadsDisabledMessage } from "./uploads.ts";
+
+registerMcpAppEnglish();
 
 /** Translate only supported content; never drop an unknown block from a successful send. */
 export function mcpAppMessageInput(

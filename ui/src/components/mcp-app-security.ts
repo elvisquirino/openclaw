@@ -2,10 +2,13 @@ import type { ContentBlock } from "@modelcontextprotocol/client";
 import type { AppBridge } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import { t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
 import { mcpAppMessageText } from "../lib/mcp-app-message-content.ts";
 import { resolveSandboxHostUrl } from "./sandbox-host.ts";
 
 type McpAppHostCapabilities = ConstructorParameters<typeof AppBridge>[2];
+registerMcpAppEnglish();
+
 export type McpAppHostSandboxCsp = NonNullable<
   NonNullable<McpAppHostCapabilities["sandbox"]>["csp"]
 >;

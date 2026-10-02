@@ -9,6 +9,7 @@ import type {
 import { applicationContext, type ApplicationContext } from "../app/context.ts";
 import { gatewayPresentationScope } from "../app/gateway-presentation-scope.ts";
 import { t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import { OpenClawLightDomElement } from "../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
@@ -16,6 +17,8 @@ import type { McpAppOpenDetail } from "./mcp-app-launch.ts";
 import { renderMcpAppSettings } from "./mcp-app-settings.ts";
 import { McpAppUnmountGate } from "./mcp-app-unmount.ts";
 import "../styles/mcp-app-extensions.css";
+
+registerMcpAppEnglish();
 
 export class McpAppPanel extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true }) private context?: ApplicationContext;

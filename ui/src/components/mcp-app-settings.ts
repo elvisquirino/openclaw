@@ -6,6 +6,9 @@ import type {
   McpAppSettingSchema,
 } from "../../../src/shared/mcp-app-extensions.js";
 import { t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
+
+registerMcpAppEnglish();
 
 export type McpAppSettingsView = {
   settings: McpAppSettings;

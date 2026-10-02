@@ -8,6 +8,7 @@ import type {
 } from "../../../src/shared/mcp-app-extensions.js";
 import { applicationContext, type ApplicationContext } from "../app/context.ts";
 import { t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import { McpAppCatalogController } from "../lib/mcp-app-catalog.ts";
 import { mcpAppRouteSearch } from "../lib/mcp-app-route.ts";
@@ -16,6 +17,8 @@ import { OpenClawLightDomElement } from "../lit/openclaw-element.ts";
 import { icons } from "./icons.ts";
 import { requestMcpAppOpen } from "./mcp-app-launch.ts";
 import "../styles/mcp-app-extensions.css";
+
+registerMcpAppEnglish();
 
 export class McpAppCatalog extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true }) private context?: ApplicationContext;

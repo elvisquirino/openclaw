@@ -4,6 +4,7 @@ import { property, state } from "lit/decorators.js";
 import { applicationContext, type ApplicationContext } from "../app/context.ts";
 import { gatewayPresentationScope } from "../app/gateway-presentation-scope.ts";
 import { t } from "../i18n/index.ts";
+import { registerMcpAppEnglish } from "../i18n/locales/en-mcp-app.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import {
   readMcpAppContexts,
@@ -18,6 +19,8 @@ import { OpenClawLightDomElement } from "../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
 import { icons } from "./icons.ts";
 import "../styles/mcp-app-extensions.css";
+
+registerMcpAppEnglish();
 
 export class McpAppContextStrip extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true }) private context?: ApplicationContext;
