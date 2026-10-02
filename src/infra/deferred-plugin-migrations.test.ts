@@ -19,8 +19,8 @@ import {
   runOpenClawStateWriteTransaction,
 } from "../state/openclaw-state-db.js";
 import { resolveOpenClawStateSqlitePath } from "../state/openclaw-state-db.paths.js";
+import type { DeferredPluginMigration } from "./deferred-plugin-migrations.contract.js";
 import {
-  type DeferredPluginMigration,
   assertDeferredPluginMigrationsCurrent,
   readDeferredPluginMigrationCompletions,
   readDeferredPluginMigrations,
