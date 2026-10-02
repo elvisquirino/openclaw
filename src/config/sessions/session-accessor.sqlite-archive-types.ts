@@ -149,10 +149,6 @@ export type SessionPendingArchivesWorkerInput = {
   env: NodeJS.ProcessEnv;
 };
 
-export type SessionArchivePresenceWorkerInput = TranscriptArchivePresenceRead & {
-  kind: "session-archive-presence";
-};
-
 export type SessionArchivePruningWorkerInput = SessionArchivePruningRead & {
   kind: "session-archive-pruning";
 };

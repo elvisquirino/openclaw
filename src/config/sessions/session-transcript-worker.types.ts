@@ -32,7 +32,6 @@ import type { SessionTranscriptBoundedActiveContext } from "./session-accessor.s
 import type { SessionTranscriptMessageEvent } from "./session-accessor.sqlite-active-events.js";
 import type {
   SessionPendingArchivesWorkerInput,
-  SessionArchivePresenceWorkerInput,
   SessionArchivePruningWorkerInput,
 } from "./session-accessor.sqlite-archive-types.js";
 import type {
@@ -99,6 +98,11 @@ import type {
   SessionTranscriptRecentActiveEventsWorkerInput,
   SessionTranscriptLatestActiveMessageWorkerInput,
 } from "./session-transcript-hydration.types.js";
+import type {
+  SessionTranscriptInventoryWorkerInput,
+  SessionTranscriptInventoryWorkerValues,
+  SessionTranscriptInventoryReaders,
+} from "./session-transcript-inventory.types.js";
 import type {
   SessionTranscriptSearchParams,
   SessionTranscriptSearchResult,
@@ -472,7 +476,7 @@ export type SessionHistoryWorkerInput =
   | SessionArchivedEvictionCandidatesWorkerInput
   | SessionArchivePruningWorkerInput
   | SessionPendingArchivesWorkerInput
-  | SessionArchivePresenceWorkerInput
+  | SessionTranscriptInventoryWorkerInput
   | SessionColdMetadataWorkerInput
   | SessionColdStorageInventoryWorkerInput
   | SessionTranscriptHydrationWorkerInput
@@ -521,7 +525,7 @@ type PreparedHistoryInput<Input> = Input extends unknown ? Omit<Input, "database
 export type SessionHistoryWorkerPreparedInput =
   PreparedHistoryInput<SessionHistoryDatabaseWorkerInput>;
 
-export type SessionTranscriptWorkerValues = {
+export type SessionTranscriptWorkerValues = SessionTranscriptInventoryWorkerValues & {
   "lifecycle-artifact-plan": {
     kind: "lifecycle-artifact-plan";
     plan: LifecycleArtifactCleanupPlan;
@@ -530,7 +534,6 @@ export type SessionTranscriptWorkerValues = {
   "conversation-delivery": { kind: "conversation-delivery"; record?: ConversationDeliveryRecord };
   prewarm: { kind: "prewarm" };
   "session-pending-archives": { kind: "session-pending-archives"; pending: boolean };
-  "session-archive-presence": { kind: "session-archive-presence"; registered: boolean };
   "historical-eviction-candidates": { kind: "historical-eviction-candidates" } & (
     | { sessionIds: string[] }
     | { batch: ArchivedSessionEvictionBatch }
@@ -644,10 +647,9 @@ type CancellableSessionHistoryReader<
   Value = SessionTranscriptWorkerValues[Input["kind"]],
 > = (input: Omit<Input, "kind" | "database">, signal?: AbortSignal) => Promise<Value>;
 
-export type SessionHistoryWorkerDatabase = {
+export type SessionHistoryWorkerDatabase = SessionTranscriptInventoryReaders & {
   readLifecycleArtifactPlan: CancellableSessionHistoryReader<LifecycleArtifactCleanupRequest>;
   prewarm: (input: { env: NodeJS.ProcessEnv }) => Promise<void>;
-  readArchivePresence: SessionHistoryReader<SessionArchivePresenceWorkerInput, boolean>;
   readPendingArchives: CancellableSessionHistoryReader<SessionPendingArchivesWorkerInput, boolean>;
   findTranscriptEvent: (
     request: SessionTranscriptMatchWorkerInput["request"],
