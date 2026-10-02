@@ -1,10 +1,16 @@
 // Verifies state-dir migrations preserve existing OpenClaw runtime data.
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import {
+  resolveOpenClawStateSqlitePath,
+  resolveQuarantineStorePath,
+} from "../state/openclaw-state-db.paths.js";
 import { withTestDir } from "../test-helpers/temp-dir.js";
 import {
   autoMigrateLegacyStateDir,
+  prepareLegacyStateDirMigration,
   resetAutoMigrateLegacyStateDirForTest,
 } from "./state-migrations.state-dir.js";
 
@@ -19,6 +25,42 @@ async function withStateDirFixture(run: (root: string) => Promise<void>): Promis
 }
 
 describe("legacy state dir auto-migration", () => {
+  it.each([
+    { name: "primary", resolve: resolveOpenClawStateSqlitePath },
+    { name: "quarantine", resolve: resolveQuarantineStorePath },
+  ])(
+    "keeps populated configless canonical $name state ahead of legacy residue",
+    async ({ resolve }) => {
+      await withStateDirFixture(async (root) => {
+        const canonical = path.join(root, ".openclaw");
+        const legacy = path.join(root, ".clawdbot");
+        const databasePaths = [canonical, legacy].map((stateDir) =>
+          resolve({ OPENCLAW_STATE_DIR: stateDir }),
+        );
+        for (const [index, pathname] of databasePaths.entries()) {
+          fs.mkdirSync(path.dirname(pathname), { recursive: true });
+          const db = new DatabaseSync(pathname);
+          try {
+            db.exec("CREATE TABLE retained_state (value TEXT NOT NULL)");
+            db.prepare("INSERT INTO retained_state(value) VALUES (?)").run(
+              index === 0 ? "current" : "older",
+            );
+          } finally {
+            db.close();
+          }
+        }
+        const before = databasePaths.map((pathname) => fs.readFileSync(pathname));
+
+        const prepared = prepareLegacyStateDirMigration({ env: {}, homedir: () => root });
+
+        expect(prepared?.stateDir).toBe(canonical);
+        expect(prepared?.result.migrated).toBe(false);
+        expect(databasePaths.map((pathname) => fs.readFileSync(pathname))).toEqual(before);
+        expect(fs.lstatSync(legacy).isDirectory()).toBe(true);
+      });
+    },
+  );
+
   it("skips a legacy symlinked state dir when it points outside supported legacy roots", async () => {
     await withStateDirFixture(async (root) => {
       const legacySymlink = path.join(root, ".clawdbot");
