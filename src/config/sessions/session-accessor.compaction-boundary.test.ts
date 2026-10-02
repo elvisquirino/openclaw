@@ -29,7 +29,10 @@ import {
   resolveSqliteTranscriptScope,
   toDatabaseOptions,
 } from "./session-accessor.sqlite-scope.js";
-import { withOwnedSessionTranscriptWrites } from "./transcript-write-context.js";
+import {
+  runWithoutOwnedSessionTranscriptWrites,
+  withOwnedSessionTranscriptWrites,
+} from "./transcript-write-context.js";
 
 const sessionDirs = useSessionStoreTempDirs(afterAll, "openclaw-compaction-boundary-");
 
@@ -71,7 +74,10 @@ describe("awaited compaction persistence", () => {
             maxBytes: 1024,
           },
         });
-        await manager.setSessionTargetAsync(replacement);
+        // A separate retarget operation does not inherit the compaction writer's authority.
+        await runWithoutOwnedSessionTranscriptWrites(() =>
+          manager.setSessionTargetAsync(replacement),
+        );
         return committed;
       },
       () => manager.appendCompactionAsync("summary", keptId, 100),
