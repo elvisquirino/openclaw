@@ -12,8 +12,7 @@ import {
 } from "../agents/mcp-oauth-store.kernel.js";
 import {
   loadSubagentMaintenanceRunsInDatabase,
-  loadSubagentRegistryFromSqlite,
-  loadSubagentRunsByRunIdsFromSqlite,
+  loadVersionedSubagentRunsInDatabase,
   loadSubagentRunsForSessionsInDatabase,
   loadSubagentRunsForChildSessionFromSqlite,
   loadSubagentRunsForSessionFromSqlite,
@@ -85,10 +84,7 @@ import {
 } from "../skills/library/selection-read.kernel.js";
 import { isTuiLastSessionReadCommand } from "../tui/tui-last-session.contract.js";
 import { readTuiLastSessionCommand } from "../tui/tui-last-session.kernel.js";
-import {
-  readAgentDatabaseDeletionSnapshotInDatabase,
-  readAgentDeletionJournalStatusInDatabase,
-} from "./agent-deletion-journal.read.js";
+import { readAgentDatabaseDeletionSnapshotInDatabase } from "./agent-deletion-journal.read.js";
 import { readBackupRunsInDatabase } from "./backup-run-records.kernel.js";
 import { readConfigMachineStateRowInDatabase } from "./config-machine-state.js";
 import { readGitHubPublicationSessionLifecycle } from "./github-publication-session-lifecycles.js";
@@ -233,12 +229,6 @@ serveOwnedWorkerTasks(
                 ),
               };
             }
-            if (command.type === "agentDeletionJournal.status") {
-              return {
-                type: command.type,
-                status: readAgentDeletionJournalStatusInDatabase(db, command.agentId),
-              };
-            }
             if (command.type === "deliveryQueue.outbound") {
               // Custody reads retain queue ownership admission even on a read-only connection.
               assertOpenClawStateWriteAllowed({
@@ -268,7 +258,7 @@ serveOwnedWorkerTasks(
             }
             if (command.type === "subagents.runs") {
               if (command.scope.kind === "all") {
-                return { type: command.type, runs: loadSubagentRegistryFromSqlite({ db }) };
+                return { type: command.type, ...loadVersionedSubagentRunsInDatabase({ db }) };
               }
               if (command.scope.kind === "maintenance") {
                 const maintenance = loadSubagentMaintenanceRunsInDatabase({ db });
@@ -295,10 +285,13 @@ serveOwnedWorkerTasks(
                   },
                 };
               }
-              const rows =
-                command.scope.kind === "session"
-                  ? loadSubagentRunsForSessionFromSqlite(command.scope.sessionKey, { db })
-                  : loadSubagentRunsByRunIdsFromSqlite(command.scope.runIds, { db });
+              if (command.scope.kind === "ids") {
+                return {
+                  type: command.type,
+                  ...loadVersionedSubagentRunsInDatabase({ db }, command.scope.runIds),
+                };
+              }
+              const rows = loadSubagentRunsForSessionFromSqlite(command.scope.sessionKey, { db });
               return {
                 type: command.type,
                 runs: new Map(rows.map((entry) => [entry.runId, entry])),

@@ -265,7 +265,7 @@ describe("update-startup", () => {
   });
 
   it("coalesces configless Git identity before the schedule cache is ready", async ({ signal }) => {
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     const probe = createDeferred<UpdateCheckResult>();
     const status = createDevGitStatus({ behind: 0, fetchOk: false });
     vi.mocked(resolveOpenClawPackageRoot).mockResolvedValue("/opt/openclaw");
@@ -1023,8 +1023,8 @@ describe("update-startup", () => {
     const status = mockDevGitStatus();
     const initial = createDeferred<UpdateCheckResult>();
     const remote = createDeferred<UpdateCheckResult>();
-    const initialEntered = createDeferred<void>();
-    const remoteEntered = createDeferred<void>();
+    const initialEntered = createDeferred();
+    const remoteEntered = createDeferred();
     vi.mocked(checkUpdateStatus).mockImplementation(({ fetchGit }) => {
       (fetchGit ? remoteEntered : initialEntered).resolve();
       return fetchGit ? remote.promise : initial.promise;
@@ -1041,11 +1041,13 @@ describe("update-startup", () => {
       await withinTest(Promise.all([initialEntered.promise, remoteEntered.promise]), signal);
       expect(checkUpdateStatus).toHaveBeenCalledTimes(2);
       const signals = vi.mocked(checkUpdateStatus).mock.calls.map(([options]) => options.signal);
-      expect(signals.every((signal) => signal && !signal.aborted)).toBe(true);
+      expect(signals.every((discoverySignal) => discoverySignal && !discoverySignal.aborted)).toBe(
+        true,
+      );
       const stopping = check.stop().then(() => {
         stopped = true;
       });
-      expect(signals.every((signal) => signal?.aborted)).toBe(true);
+      expect(signals.every((discoverySignal) => discoverySignal?.aborted)).toBe(true);
       initial.reject(new Error("synthetic discovery failure"));
       await initializing;
       expect(stopped).toBe(false);
@@ -1070,7 +1072,7 @@ describe("update-startup", () => {
   }) => {
     const status = mockDevGitStatus();
     const remote = createDeferred<UpdateCheckResult>();
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     vi.mocked(checkUpdateStatus).mockImplementationOnce(() => {
       entered.resolve();
       return remote.promise;
@@ -1117,7 +1119,7 @@ describe("update-startup", () => {
     mockDevGitStatus();
     process.env.NODE_ENV = "production";
     const logRead = createDeferred<Awaited<ReturnType<typeof runCommandWithTimeout>>>();
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     vi.mocked(runCommandWithTimeout).mockImplementationOnce(() => {
       entered.resolve();
       return logRead.promise;
@@ -1207,7 +1209,7 @@ describe("update-startup", () => {
   it("reads telemetry consent after awaited install discovery", async ({ signal }) => {
     mockPackageInstallStatus();
     const discovery = createDeferred<UpdateCheckResult>();
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     vi.mocked(checkUpdateStatus).mockImplementationOnce(() => {
       entered.resolve();
       return discovery.promise;
@@ -1278,7 +1280,7 @@ describe("update-startup", () => {
   it("preserves an applying campaign after update checks are disabled", async ({ signal }) => {
     mockPackageUpdateStatus("beta", "2.0.0-beta.1");
     const applying = createDeferred<{ status: "handoff" }>();
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     const runAutoUpdate = vi.fn(() => {
       entered.resolve();
       return applying.promise;
@@ -1310,8 +1312,8 @@ describe("update-startup", () => {
 
   it("returns cleanup before slow dev git discovery schedules a campaign", async ({ signal }) => {
     const remoteFetchDelayMs = 65_653;
-    const entered = createDeferred<void>();
-    const remoteFinished = createDeferred<void>();
+    const entered = createDeferred();
+    const remoteFinished = createDeferred();
     vi.mocked(resolveOpenClawPackageRoot).mockResolvedValue("/opt/openclaw");
     vi.mocked(checkUpdateStatus).mockImplementation(({ fetchGit, timeoutMs }) => {
       const isRemoteFetch = fetchGit === true;
@@ -1371,7 +1373,7 @@ describe("update-startup", () => {
 
   it("drains stopped discovery before a replacement scheduler", async ({ signal }) => {
     const oldGitStatus = mockDevGitStatus({ upstreamSha: "old-upstream" });
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     const oldFetch = createDeferred<UpdateCheckResult>();
     vi.mocked(checkUpdateStatus)
       .mockResolvedValueOnce(oldGitStatus)
@@ -1461,7 +1463,7 @@ describe("update-startup", () => {
 
   it("does not publish an old Dev refresh over a replacement channel", async ({ signal }) => {
     const oldGitStatus = mockDevGitStatus();
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     const discovery = createDeferred<UpdateCheckResult>();
     vi.mocked(checkUpdateStatus).mockImplementationOnce(() => {
       entered.resolve();
@@ -1494,7 +1496,7 @@ describe("update-startup", () => {
       mockPackageUpdateStatus("beta", "2.0.0-beta.1");
       detectRespawnSupervisorMock.mockReturnValue("systemd");
       cancelManagedServiceUpdateHandoffMock.mockResolvedValueOnce(cancelled);
-      const entered = createDeferred<void>();
+      const entered = createDeferred();
       let releaseHandoff!: () => void;
       startManagedServiceUpdateHandoffMock.mockImplementationOnce(
         () =>
@@ -1568,7 +1570,7 @@ describe("update-startup", () => {
     mockPackageUpdateStatus("beta", "2.0.0-beta.1");
     detectRespawnSupervisorMock.mockReturnValue("systemd");
     startManagedServiceUpdateHandoffMock.mockRejectedValueOnce(new Error("spawn ENOENT"));
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     let releaseTriage!: (report: typeof triageResult) => void;
     runUpdateFailureTriageMock.mockImplementationOnce(
       () =>
@@ -1903,10 +1905,10 @@ describe("update-startup", () => {
 
   it("joins an aborted catalog refresh when it rejects", async ({ signal }) => {
     let capturedSignal: AbortSignal | undefined;
-    const entered = createDeferred<void>();
+    const entered = createDeferred();
     const finished = createDeferred<Awaited<ReturnType<typeof refreshRemoteModelCatalogMock>>>();
-    refreshRemoteModelCatalogMock.mockImplementationOnce(({ signal }) => {
-      capturedSignal = signal;
+    refreshRemoteModelCatalogMock.mockImplementationOnce(({ signal: catalogSignal }) => {
+      capturedSignal = catalogSignal;
       entered.resolve();
       return finished.promise;
     });

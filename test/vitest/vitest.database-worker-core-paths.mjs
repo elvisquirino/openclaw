@@ -174,6 +174,7 @@ export const databaseWorkerCoreTestFiles = [
   "src/agents/bash-tools.process.finished-retention.test.ts",
   "src/agents/bash-tools.test.ts",
   "src/agents/code-mode.bridge.host-denial.test.ts",
+  "src/agents/code-mode.bridge.lifecycle.test.ts",
   "src/agents/command/session-store.snooze.test.ts",
   "src/agents/command/session-store.test.ts",
   "src/agents/core-coding-tools.exec-workdir.test.ts",
@@ -560,6 +561,7 @@ export const databaseWorkerCoreTestFiles = [
   "src/state/openclaw-agent-db.integrity-lease.test.ts",
   "src/state/openclaw-agent-execution.integrity.test.ts",
   "src/state/openclaw-agent-execution-incognito.test.ts",
+  "src/state/openclaw-agent-execution-incognito.sessions.test.ts",
   "src/state/openclaw-agent-execution.creation-witness.test.ts",
   "src/state/openclaw-agent-execution.close-wedge.test.ts",
   "src/state/openclaw-agent-execution-cleanup.test.ts",
@@ -575,6 +577,7 @@ export const databaseWorkerCoreTestFiles = [
   "test/runtime-agent.codex-initialization.integration.test.ts",
   "packages/memory-host-sdk/src/host/session-memory-sync.test.ts",
   "packages/memory-host-sdk/src/host/session-files-archive-identity.test.ts",
+  "packages/memory-host-sdk/src/host/session-files.test.ts",
   "packages/memory-host-sdk/src/host/session-transcript-corpus.test.ts",
   "src/agents/harness/native-hook-relay-store.test.ts",
   "src/agents/harness/native-hook-relay.approval-binding.test.ts",
@@ -732,6 +735,7 @@ export const databaseWorkerCoreTestFiles = [
   "src/tts/tts-summary.resources.test.ts",
   "src/agents/simple-completion-runtime.plugin-scope.test.ts",
   "src/agents/tools/pdf-tool.static-runtime.test.ts",
+  "src/agents/prepared-model-catalog-worker.agent-database.integration.test.ts",
   "src/agents/prepared-model-catalog-worker.chat-metadata.integration.test.ts",
   "src/agents/prepared-model-catalog-worker.custody.integration.test.ts",
   "src/agents/prepared-model-catalog-worker.directory.test.ts",
@@ -916,6 +920,7 @@ const databaseWorkerCoreTestFileSet = new Set(databaseWorkerCoreTestFiles);
 
 // Preserve watch admission for consumers previously inferred into fast lanes.
 export const databaseWorkerCoreFormerFastKinds = new Map([
+  ["packages/memory-host-sdk/src/host/session-files.test.ts", "unitFastIsolated"],
   ["src/infra/restart-sentinel.update-result.test.ts", "unitFast"],
   ["src/commands/doctor-maintenance.session-workers.test.ts", "unitFast"],
   ["src/commands/doctor-session-canonical-keys.completions.test.ts", "unitFast"],
