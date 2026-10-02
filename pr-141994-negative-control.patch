@@ -1,0 +1,78 @@
+--- a/src/gateway/server-methods/github-personal-authorization.ts
++++ b/src/gateway/server-methods/github-personal-authorization.ts
+@@ -166,6 +166,7 @@
+   }
+   // sessionId/lifecycleRevision pin the incarnation; archivedAt is re-read below because
+   // archiving flips it without touching either identity field.
++  let latest = session;
+   const readCurrent = () => {
+     const current = readSession(session.sessionKey, session.agentId);
+     if (
+@@ -181,13 +182,18 @@
+     personal,
+     session,
+     sessionScoped: authority.sessionScope === "operator.sessions.read",
+-    currentSession: readCurrent,
++    currentSession: () => {
++      latest = readCurrent();
++      return latest;
++    },
+     // Callbacks may refresh live facts, but must not replace the response's archive snapshot.
+-    assertSessionUnchanged: (snapshot: ReturnType<typeof readCurrent>): void => {
++    assertSessionUnchanged: () => {
+       const current = readCurrent();
+-      if (current.archivedAt !== snapshot.archivedAt) {
++      if (current.archivedAt !== latest.archivedAt) {
+         throw new Error("GitHub publication session access changed; select the session again.");
+       }
++      latest = current;
++      return current;
+     },
+   };
+ }
+--- a/src/gateway/server-methods/sessions-github.ts
++++ b/src/gateway/server-methods/sessions-github.ts
+@@ -247,7 +247,7 @@
+       const action = read.personal.kind === "eligible" ? read.personal.action : null;
+       let personal = action ? await service!.status(action) : null;
+       const session = read.currentSession();
+-      const assertResponseCurrent = () => read.assertSessionUnchanged(session);
++      const assertResponseCurrent = () => read.assertSessionUnchanged();
+       const pendingPersonal = action ? await coordinator.personalPending(action, session) : null;
+       assertResponseCurrent();
+       if (action && personal) {
+@@ -257,14 +257,14 @@
+         session,
+         options.params.idempotencyKey,
+         (snapshot) =>
+-          isSessionPublicationSuperseded(options, session, snapshot, assertResponseCurrent),
++          isSessionPublicationSuperseded(options, session, snapshot, read.currentSession),
+       );
+       assertResponseCurrent();
+       if (action && personal) {
+         personal = service!.revalidateStatus(action, personal);
+       }
+       if (shared && read.sessionScoped) {
+-        if (!(await hasSupportedGitHubPublicationTarget(session, assertResponseCurrent))) {
++        if (!(await hasSupportedGitHubPublicationTarget(session, read.currentSession))) {
+           shared = null;
+         }
+         assertResponseCurrent();
+@@ -296,7 +296,7 @@
+       const session = read.currentSession();
+       const shared = await service.sharedStatus(session, options.params.requestId);
+       if (shared) {
+-        read.assertSessionUnchanged(session);
++        read.assertSessionUnchanged();
+         options.respond(true, shared);
+         return;
+       }
+@@ -309,7 +309,7 @@
+         options.params.requestId,
+         prepared,
+       );
+-      read.assertSessionUnchanged(session);
++      read.assertSessionUnchanged();
+       options.respond(true, result);
+     },
+   ),

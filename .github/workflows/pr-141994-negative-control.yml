@@ -1,0 +1,80 @@
+name: PR 141994 archive regression negative control
+on:
+  push:
+    branches: [proof/pr-141994-archive-negative]
+permissions:
+  contents: read
+jobs:
+  negative-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - name: Checkout bounded proof patch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: pr-141994-negative-control.patch
+          sparse-checkout-cone-mode: false
+      - name: Retain proof patch outside the candidate checkout
+        run: cp pr-141994-negative-control.patch "$RUNNER_TEMP/negative-control.patch"
+      - name: Checkout exact reviewed candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: b45b6c65e3502cac57703ba76cf2d061b84a6cc6
+          persist-credentials: false
+          sparse-checkout: ""
+      - name: Verify candidate and restore the pre-fix mutable snapshot
+        run: |
+          test "$(git rev-parse HEAD)" = b45b6c65e3502cac57703ba76cf2d061b84a6cc6
+          git apply --check "$RUNNER_TEMP/negative-control.patch"
+          git apply "$RUNNER_TEMP/negative-control.patch"
+          git diff --check
+          git diff --stat
+          git diff --exit-code -- src/gateway/github-personal-publication-outcomes.test.ts
+      - name: Prepare isolated Node and frozen dependencies
+        uses: ./.github/actions/setup-node-env
+        with:
+          node-version: "24.19.0"
+          install-bun: "false"
+          frozen-lockfile: "true"
+          cache-mode: "off"
+      - name: Execute the unchanged regression and require its intended failure
+        shell: bash
+        run: |
+          set +e
+          pnpm test src/gateway/github-personal-publication-outcomes.test.ts \
+            -t 'pins the response archive snapshot through shared receipt supersession' \
+            --reporter=verbose > "$RUNNER_TEMP/negative-control.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/negative-control.log"
+          test "$result" = 1
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', (Path(os.environ['RUNNER_TEMP']) / 'negative-control.log').read_text())
+          required = [
+              'pins the response archive snapshot through shared receipt supersession',
+              'AssertionError: expected true to be false',
+              'expect(archived[0]).toBe(false)',
+          ]
+          for expected in required:
+              if expected not in text:
+                  raise SystemExit('Missing intended negative-control evidence: ' + expected)
+          if not re.search(r'Tests\s+1 failed', text):
+              raise SystemExit('Expected exactly one failing regression test')
+          print('Negative control verified: the pre-fix mutable snapshot accepted the stale archived response.')
+          PY
+      - name: Retain the bounded negative-control evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr-141994-negative-control
+          path: |
+            ${{ runner.temp }}/negative-control.patch
+            ${{ runner.temp }}/negative-control.log
+          retention-days: 7
+          if-no-files-found: error
