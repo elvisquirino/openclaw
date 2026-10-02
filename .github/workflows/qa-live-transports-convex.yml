@@ -153,7 +153,7 @@ env:
 
 jobs:
   authorize_actor:
-    if: github.repository == 'openclaw/openclaw'
+    if: github.repository == 'openclaw/openclaw' || github.repository == 'elvisquirino/openclaw'
     name: Authorize workflow actor
     runs-on: ${{ inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON(vars.OPENCLAW_CI_RUNNER_BACKEND == 'github' && 'ubuntu-24.04' || 'blacksmith-8vcpu-ubuntu-2404'))) || (vars.OPENCLAW_CI_RUNNER_BACKEND == 'github' && 'ubuntu-24.04' || 'blacksmith-8vcpu-ubuntu-2404') }}
     timeout-minutes: 10
