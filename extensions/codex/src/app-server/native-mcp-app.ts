@@ -1,7 +1,6 @@
 import {
   prepareHarnessNativeMcpAppPreview,
   loadAgentHarnessMcpConfig,
-  resolveConfiguredMcpTransport,
   type EmbeddedRunAttemptParamsV2 as EmbeddedRunAttemptParams,
   type McpToolCatalog,
   type SessionMcpRuntime,
@@ -18,6 +17,7 @@ import {
 } from "openclaw/plugin-sdk/codex-mcp-projection";
 import {
   asOptionalRecord,
+  normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
 } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { z } from "zod";
@@ -144,7 +144,7 @@ export function createNativeMcpRuntime(params: {
         Object.entries(configured.config.mcpServers)
           .filter(
             ([, server]) =>
-              (resolveConfiguredMcpTransport(server) ?? "stdio") === "stdio" &&
+              (normalizeLowercaseStringOrEmpty(server.transport) || "stdio") === "stdio" &&
               typeof server.command === "string",
           )
           .map(([name]) => name),
