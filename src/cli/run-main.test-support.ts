@@ -1,5 +1,5 @@
 import process from "node:process";
-import { afterAll, afterEach, beforeAll, beforeEach, expect, vi, type MockInstance } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from "vitest";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import type { ConfigSnapshotReadOptions } from "../config/io.types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -113,9 +113,11 @@ const runTuiCliActionMock = vi.hoisted(() =>
   vi.fn<(target: string | undefined, opts: unknown) => Promise<void>>(async () => {}),
 );
 const probeGatewayConfiguredModelMock = vi.hoisted(() =>
-  vi.fn<typeof import("../commands/onboard-helpers.js").probeGatewayConfiguredModel>(async () => ({
-    kind: "configured",
-  })),
+  vi.fn<typeof import("../commands/onboard-gateway-model.runtime.js").probeGatewayConfiguredModel>(
+    async () => ({
+      kind: "configured",
+    }),
+  ),
 );
 const readActiveGatewayLockPortMock = vi.hoisted(() =>
   vi.fn(async (): Promise<number | undefined> => undefined),
@@ -389,7 +391,7 @@ vi.mock("../commands/onboard-remote-gateway.js", () => ({
   runRemoteGatewayInferenceOnboarding: runRemoteGatewayInferenceOnboardingMock,
 }));
 
-vi.mock("../commands/onboard-helpers.js", () => ({
+vi.mock("../commands/onboard-gateway-model.runtime.js", () => ({
   probeGatewayConfiguredModel: probeGatewayConfiguredModelMock,
 }));
 
@@ -411,24 +413,6 @@ vi.mock("../infra/net/proxy/proxy-lifecycle.js", () => ({
   startProxy: startProxyMock,
   stopProxy: stopProxyMock,
 }));
-
-async function withCliExitSpies(
-  run: (
-    errorSpy: MockInstance<typeof console.error>,
-    exitSpy: MockInstance<typeof process.exit>,
-  ) => Promise<void>,
-): Promise<void> {
-  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-  const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
-    throw new Error(`exit:${String(code)}`);
-  });
-  try {
-    await run(errorSpy, exitSpy);
-  } finally {
-    exitSpy.mockRestore();
-    errorSpy.mockRestore();
-  }
-}
 
 async function runGatewayBeforeHook(opts: { reset?: boolean } = {}): Promise<void> {
   await addGatewayRunCommandMock.mock.calls[0]?.[1]?.beforeRun?.(opts);
@@ -508,7 +492,6 @@ export {
   flushExitAfterOneShotOutputMock,
   requestExitAfterOneShotOutputMock,
   maybeRunCliInContainerMock,
-  withCliExitSpies,
   runGatewayBeforeHook,
   makeProgram,
   validConfig,

@@ -21,7 +21,6 @@ import {
   loadConfigMock,
   startProxyMock,
   stopProxyMock,
-  withCliExitSpies,
   runGatewayBeforeHook,
   makeProgram,
   validConfig,
@@ -33,6 +32,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createNewerSqliteSchemaVersionError } from "../infra/sqlite-user-version.js";
 import { withEnvAsync } from "../test-utils/env.js";
 import { getGatewayRunRuntimeHooks } from "./gateway-cli/runtime-hooks.js";
+import { withCliExitSpies } from "./run-main.bare-root.test-support.js";
 import { makeProxyHandle } from "./run-main.proxy-exit.test-support.js";
 
 async function withGatewayHome(

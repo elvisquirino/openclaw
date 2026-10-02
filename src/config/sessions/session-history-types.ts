@@ -88,7 +88,7 @@ export type ReadRecentSessionMessagesOptions = {
 };
 
 export type ReadSessionMessagesAsyncOptions =
-  | { mode: "full"; reason: string }
+  | { mode: "full"; reason: string; includeOffPathMessages?: boolean }
   | ({ mode: "recent" } & ReadRecentSessionMessagesOptions);
 
 export type SessionTranscriptReadOptions = {
