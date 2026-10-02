@@ -9,6 +9,7 @@ export const page = definePage({
   component: () =>
     import("./apps-page.ts").then(() => ({
       header: true,
-      render: (search: string | undefined) => html`<openclaw-apps-page .appSearch=${search ?? ""}></openclaw-apps-page>`,
+      render: (search: string | undefined) =>
+        html`<openclaw-apps-page .appSearch=${search ?? ""}></openclaw-apps-page>`,
     })),
 });
