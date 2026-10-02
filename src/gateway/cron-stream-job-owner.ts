@@ -278,7 +278,14 @@ export class CronStreamJobOwner {
       await this.stopOperation(reason, job);
     });
     // Scheduled callbacks can be waiting on this queue; join only outside its tail.
-    return this.awaitBoundedStop(queuedStop.finally(() => scheduler.stop()));
+    const settleStop = async () => {
+      try {
+        await queuedStop;
+      } finally {
+        await scheduler.stop();
+      }
+    };
+    return this.awaitBoundedStop(settleStop());
   }
 
   processExited(exit: RunExit, generation: number): Promise<void> {

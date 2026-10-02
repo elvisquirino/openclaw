@@ -28,7 +28,7 @@ export async function emitCronOutcomeForJob(
   emitCronOutcomeEventForJob(state, job, result);
 }
 
-export function createCronOutcomeEvent(job: CronJob, result: TimedCronRunOutcome) {
+function createCronOutcomeEvent(job: CronJob, result: TimedCronRunOutcome) {
   return {
     jobId: job.id,
     action: "finished",

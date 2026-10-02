@@ -92,6 +92,7 @@ describe("cron stream output", () => {
             writing.resolve();
             return await releaseWrite.promise;
           }
+          return undefined;
         }),
       });
       let waking: ReturnType<typeof clock.advanceBy> = undefined;

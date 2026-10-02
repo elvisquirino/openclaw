@@ -119,7 +119,9 @@ describe("cron service cross-tick admission", () => {
       ...clock.clock,
       arm: (wake, delayMs) => {
         const cancel = clock.clock.arm(wake, delayMs);
-        if (delayMs === 0) capacityWakeArmed.resolve();
+        if (delayMs === 0) {
+          capacityWakeArmed.resolve();
+        }
         return cancel;
       },
     });

@@ -120,6 +120,9 @@ describe("gateway cron stop-and-drain automation ownership", () => {
     async (stopMode, { signal }) => {
       stopAllMock.mockResolvedValue(undefined);
       const original = await startGatewayCron(`system-jobs-${stopMode}`, false);
+      // Disabled startup cancels watchers; join that setup before observing the handoff.
+      await original.state.reconcileExitWatchers();
+      cancelAllMock.mockClear();
       const cfg: OpenClawConfig = {
         ...original.cfg,
         agents: { entries: { main: { heartbeat: { every: "1h" } } } },

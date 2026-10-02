@@ -201,7 +201,9 @@ describe("cron service run admission", () => {
       runIsolatedAgentJob: vi.fn(async ({ job }: { job: { id: string } }) => {
         active += 1;
         peakActive = Math.max(peakActive, active);
-        if (active === 4) firstWaveStarted.resolve();
+        if (active === 4) {
+          firstWaveStarted.resolve();
+        }
         await releaseRunners.promise;
         active -= 1;
         completed.add(job.id);

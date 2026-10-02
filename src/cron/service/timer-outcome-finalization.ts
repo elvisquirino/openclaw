@@ -119,6 +119,7 @@ export async function finalizeCompletedCronRunOutcomes(
   let finalizedOutcomes: TimedCronRunOutcome[] = [];
   let finalizationSucceeded = false;
   const emittedRequests = new Set<TimedCronRunOutcome>();
+  const missingRequestedJobs = new Set<TimedCronRunOutcome>();
   const canPublish = (outcome: TimedCronRunOutcome) =>
     !(state.stopped && opts?.discardWhenStopped) &&
     isCronActiveJobMarkerCurrent(outcome.activeJobMarker);
@@ -128,17 +129,18 @@ export async function finalizeCompletedCronRunOutcomes(
       // Payload outcomes survive a failed row write as recovery facts. Quiet
       // evaluations have no payload outcome and finalize only after the commit.
       for (const outcome of outcomes) {
+        if (
+          outcome.request &&
+          (outcome.activeJobMarker?.jobRemoved === true ||
+            !state.store?.jobs.some((job) => job.id === outcome.jobId))
+        ) {
+          missingRequestedJobs.add(outcome);
+          continue;
+        }
         if (outcome.status !== "ok" || outcome.triggerEval?.fired !== false) {
           const taskJob = structuredClone(
             state.store?.jobs.find((job) => job.id === outcome.jobId) ?? outcome.job,
           );
-          if (
-            outcome.request &&
-            (outcome.activeJobMarker?.jobRemoved === true ||
-              !state.store?.jobs.some((job) => job.id === outcome.jobId))
-          ) {
-            continue;
-          }
           applyOutcomeToAuthoritativeJob(state, taskJob, outcome, {
             request: outcome.request,
             deferredNotifications: [],
@@ -299,8 +301,7 @@ export async function finalizeCompletedCronRunOutcomes(
         continue;
       }
       const missingJob =
-        outcome.activeJobMarker?.jobRemoved === true ||
-        !state.store?.jobs.some((job) => job.id === outcome.jobId);
+        outcome.activeJobMarker?.jobRemoved === true || missingRequestedJobs.has(outcome);
       if (finalizedOutcomes.includes(outcome) && canPublish(outcome)) {
         if (!missingJob) {
           maybeNotifyManualIsolatedSetupTimeout(state, {
