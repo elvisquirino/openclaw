@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../test/helpers/promise.js";
@@ -200,6 +200,32 @@ describe("registered MCP App host-file routes", () => {
     connection.abort();
     expect(view.disposeCallbacks?.size).toBe(0);
     expect((await invoke("mcp.app.readResource", { uri }))[0]).toBe(false);
+  });
+
+  it("publishes atomic replacements and subsequent writes to the replacement file", async () => {
+    let notified = createDeferred();
+    publish.mockImplementation(() => notified.resolve());
+    expect((await invoke("mcp.app.subscribeResource", { uri }))[0]).toBe(true);
+    const file = path.join(state.root, "part.stl");
+    await writeFile(`${file}.tmp`, "solid replacement");
+    await rename(`${file}.tmp`, file);
+    await notified.promise;
+    expect(publish).toHaveBeenCalledWith(
+      "mcp.app.resourceUpdated",
+      { viewId, uri },
+      new Set(["alice"]),
+    );
+    notified = createDeferred();
+    publish.mockClear();
+    await writeFile(file, "solid updated replacement");
+    await notified.promise;
+    expect(publish).toHaveBeenCalledWith(
+      "mcp.app.resourceUpdated",
+      { viewId, uri },
+      new Set(["alice"]),
+    );
+    connection.abort();
+    expect(getMcpAppViewLease(viewId, runtime)?.disposeCallbacks?.size).toBe(0);
   });
 
   it("registers and removes subscriptions through the same view authority", async () => {

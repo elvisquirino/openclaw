@@ -322,16 +322,29 @@ export async function subscribeMcpAppHostFile(
         notifying = false;
       }
     };
-    // Directory watching survives the existing editor owner's atomic replacements.
-    const watcher = watch(
-      path.dirname(path.join(file.rootDir, file.path)),
-      { persistent: false },
-      (_event, name) => {
-        if (!name || name === path.basename(file.path)) {
-          void notify();
+    // Watch the file: macOS FSEvents directory watches can drop events under load.
+    const arm = () =>
+      watch(path.join(file.rootDir, file.path), { persistent: false }, (event) => {
+        if (event === "rename") {
+          watcher.close();
+          rearm();
         }
-      },
-    );
+        void notify();
+      }).on("error", close);
+    const rearm = (retry = true) => {
+      if (closed) {
+        return;
+      }
+      try {
+        watcher = arm();
+      } catch (error) {
+        if (retry && (error as NodeJS.ErrnoException).code === "ENOENT") {
+          setImmediate(() => rearm(false));
+        } else {
+          close();
+        }
+      }
+    };
     const close = () => {
       if (closed) {
         return;
@@ -344,7 +357,7 @@ export async function subscribeMcpAppHostFile(
       }
       view.disposeCallbacks?.delete(close);
     };
-    watcher.on("error", close);
+    let watcher = arm();
     client.connectionSignal?.addEventListener("abort", close, { once: true });
     watchers.set(connId, close);
     subscriptions.set(view, watchers);
