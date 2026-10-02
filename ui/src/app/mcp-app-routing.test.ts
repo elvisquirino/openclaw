@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mcpAppRouteFromSearch } from "../lib/mcp-app-route.ts";
-import { navigateMcpAppLink, startMcpAppRouting } from "./mcp-app-routing.ts";
+import { mcpAppRouteFromSearch, parseMcpAppLink } from "../lib/mcp-app-route.ts";
+import { looksLikeMcpAppLink, startMcpAppRouting } from "./mcp-app-link-routing.ts";
 
 describe("MCP app link routing", () => {
   let cleanup: (() => void) | undefined;
@@ -10,7 +10,7 @@ describe("MCP app link routing", () => {
     document.body.replaceChildren();
   });
 
-  it("passes the marketplace plugin identity through the real click boundary", () => {
+  it("passes the marketplace plugin identity through the real click boundary", async () => {
     const navigate = vi.fn();
     cleanup = startMcpAppRouting({ navigate }).dispose;
     const anchor = document.createElement("a");
@@ -18,6 +18,8 @@ describe("MCP app link routing", () => {
     document.body.append(anchor);
     const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
     expect(anchor.dispatchEvent(click)).toBe(false);
+    anchor.href = "https://example.com/changed-after-click";
+    await vi.dynamicImportSettled();
     expect(navigate).toHaveBeenCalledOnce();
     expect(navigate.mock.calls[0]?.[0]).toBe("apps");
     expect(mcpAppRouteFromSearch(navigate.mock.calls[0]?.[1].search)).toEqual({
@@ -29,7 +31,7 @@ describe("MCP app link routing", () => {
     });
   });
 
-  it("routes ordinary chat links even when their renderer requests a new tab", () => {
+  it("routes ordinary chat links even when their renderer requests a new tab", async () => {
     const navigate = vi.fn();
     cleanup = startMcpAppRouting({ navigate }).dispose;
     const anchor = document.createElement("a");
@@ -39,18 +41,28 @@ describe("MCP app link routing", () => {
     vi.spyOn(event, "composedPath").mockReturnValue([anchor, document]);
     document.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
+    await vi.dynamicImportSettled();
     expect(navigate).toHaveBeenCalledWith("apps", {
       search: "?tool=cad.library&path=%2Fparts%3Ftag%3Dbolt&plugin=parts&marketplace=team",
     });
   });
 
-  it("does not hijack external URLs or modified navigation", () => {
+  it("does not hijack ordinary URLs, downloads, or modified navigation", async () => {
     const navigate = vi.fn();
     cleanup = startMcpAppRouting({ navigate }).dispose;
-    expect(
-      navigateMcpAppLink({ navigate }, "https://example.com/plugins/parts/app/cad.library"),
-    ).toBe(false);
     const anchor = document.createElement("a");
+    for (const href of [
+      "https://example.com/x",
+      "mailto:hello@example.com",
+      "/relative",
+      "https://chatgpt.com/other",
+    ]) {
+      anchor.href = href;
+      const event = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+      vi.spyOn(event, "composedPath").mockReturnValue([anchor, document]);
+      document.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
     anchor.href = "chatgpt://plugins/parts/app/cad.library";
     const event = new MouseEvent("click", {
       button: 0,
@@ -61,6 +73,64 @@ describe("MCP app link routing", () => {
     vi.spyOn(event, "composedPath").mockReturnValue([anchor, document]);
     document.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
+    anchor.download = "plugin";
+    const download = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+    vi.spyOn(download, "composedPath").mockReturnValue([anchor, document]);
+    document.dispatchEvent(download);
+    expect(download.defaultPrevented).toBe(false);
+    await vi.dynamicImportSettled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("admits accepted parser fixtures and rejects ordinary links with the eager probe", () => {
+    for (const href of [
+      "codex://plugins/parts%40work/app/cad%2Flibrary?path=%2Fparts%3Ftag%3Dbolt%26sort%3Dasc",
+      "https://chatgpt.com/plugins/parts/app/cad.library",
+      "codex://plugins/vendor-parts@team%20market/app/cad.library?path=%2Fparts%3Ftag%3Dbolt",
+      "chatgpt://plugins/parts/app/cad.library",
+      "openclaw://plugins/parts/app/cad.library",
+      "HTTPS://CHATGPT.COM:443/plugins/parts/app/cad.library",
+      "CODEX://plugins/parts/app/cad.library",
+    ]) {
+      expect(parseMcpAppLink(href)).not.toBeNull();
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      expect(looksLikeMcpAppLink(anchor.href)).toBe(true);
+    }
+    for (const href of [
+      "https://example.com/x",
+      "mailto:hello@example.com",
+      "/relative",
+      "https://chatgpt.com/other",
+    ]) {
+      expect(looksLikeMcpAppLink(href)).toBe(false);
+    }
+  });
+
+  it("drops malformed plugin links after interception", async () => {
+    const navigate = vi.fn();
+    cleanup = startMcpAppRouting({ navigate }).dispose;
+    const anchor = document.createElement("a");
+    anchor.href = "codex://plugins/%zz/app/library";
+    const event = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+    vi.spyOn(event, "composedPath").mockReturnValue([anchor, document]);
+    document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    await vi.dynamicImportSettled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("does not navigate after the routing owner is disposed while loading", async () => {
+    const navigate = vi.fn();
+    cleanup = startMcpAppRouting({ navigate }).dispose;
+    const anchor = document.createElement("a");
+    anchor.href = "codex://plugins/parts/app/library";
+    const event = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+    vi.spyOn(event, "composedPath").mockReturnValue([anchor, document]);
+    document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    cleanup();
+    await vi.dynamicImportSettled();
     expect(navigate).not.toHaveBeenCalled();
   });
 });
