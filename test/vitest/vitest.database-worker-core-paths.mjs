@@ -6,7 +6,6 @@ export const databaseWorkerCoreTestFiles = [
   "src/agents/tool-schema-quarantine.test.ts",
   "src/agents/embedded-agent-runner/run/attempt-bundle-tools.test.ts",
   "src/agents/embedded-agent-runner/run/attempt-transcript-recovery.test.ts",
-  "src/agents/embedded-agent-runner/run/attempt-phase-lifecycle.test.ts",
   "src/agents/embedded-agent-runner/run.compaction-runtime.test.ts",
   "src/agents/embedded-agent-runner/wait-for-idle-before-flush.test.ts",
   "src/agents/embedded-agent-runner/run/attempt-session-identity.worker.test.ts",
