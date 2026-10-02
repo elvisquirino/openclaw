@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { awaitGateBeforeSettlement, createDeferred } from "../../../test/helpers/promise.js";
+import {
+  awaitGateBeforeSettlement,
+  createDeferred,
+  withinTest,
+} from "../../../test/helpers/promise.js";
 import { compareSessionProviderReviewInWorker } from "../../config/sessions/provider-review-store.worker.js";
 import type { SessionProviderReview } from "../../config/sessions/provider-review.types.js";
 import {
@@ -31,9 +35,9 @@ beforeEach(() => mocks.afterSuggestionClaim.mockReset());
 
 // Adapter observers notify after the real queue takes custody.
 describe("suggestions queued behind provider review", () => {
-  it.each(["add", "edit", "dismiss", "send", "queue"] as const)(
+  it.for(["add", "edit", "dismiss", "send", "queue"] as const)(
     "preserves the lifecycle boundary for %s without replacing the session",
-    async (action) => {
+    async (action, { signal }) => {
       await withOpenClawTestState({ scenario: "minimal" }, async (state) => {
         const scope = { agentId: "main", sessionKey, env: state.env };
         await upsertSessionEntryCore(scope, {
@@ -76,7 +80,7 @@ describe("suggestions queued behind provider review", () => {
             entered.resolve();
             await release.promise;
           });
-          await entered.promise;
+          await withinTest(entered.promise, signal);
           // Keep the canonical prepared postimage; a broad host invalidation would mask missing facts.
           review = runOpenClawAgentWorkerWrite(options, async () =>
             compareSessionProviderReviewInWorker(
@@ -95,11 +99,15 @@ describe("suggestions queued behind provider review", () => {
         };
         if (action === "add") {
           const add = metadataWrites.addSessionSuggestionInWorker;
-          vi.spyOn(metadataWrites, "addSessionSuggestionInWorker").mockImplementation((...args) => {
-            const pending = add(...args);
-            metadataQueued.resolve();
-            return pending;
-          });
+          vi.spyOn(metadataWrites, "addSessionSuggestionInWorker").mockImplementation(
+            async (...args) => {
+              // Capture lifecycle facts before introducing the preceding writer.
+              await queueReviewBeforeNextWrite();
+              const pending = add(...args);
+              metadataQueued.resolve();
+              return pending;
+            },
+          );
         } else {
           const finalize = metadataWrites.finalizeSessionSuggestionClaimInWorker;
           vi.spyOn(metadataWrites, "finalizeSessionSuggestionClaimInWorker").mockImplementation(
@@ -121,9 +129,6 @@ describe("suggestions queued behind provider review", () => {
           }
         }
         try {
-          if (action === "add") {
-            await queueReviewBeforeNextWrite();
-          }
           request = call(
             action === "add" ? "session.suggestions.add" : "session.suggestions.resolve",
             action === "add"
@@ -132,14 +137,17 @@ describe("suggestions queued behind provider review", () => {
             client("owner", "Owner"),
             requestContext,
           );
-          await awaitGateBeforeSettlement(
-            metadataQueued.promise,
-            request,
-            "suggestion finished before its metadata writer entered the queue",
+          await withinTest(
+            awaitGateBeforeSettlement(
+              metadataQueued.promise,
+              request,
+              "suggestion finished before its metadata writer entered the queue",
+            ),
+            signal,
           );
           expect(loadSessionEntry(scope)?.providerReview).toBeUndefined();
           release.resolve();
-          const [result, paused] = await Promise.all([request, review!]);
+          const [result, paused] = await withinTest(Promise.all([request, review!]), signal);
           expect(paused.providerReview).toEqual(providerReview);
           expect(loadSessionEntry(scope)).toMatchObject({
             sessionId: originalEntry.sessionId,
