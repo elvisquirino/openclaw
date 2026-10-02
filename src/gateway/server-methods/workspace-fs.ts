@@ -45,7 +45,6 @@ export async function openWorkspaceRoot(rootDir: string): Promise<WorkspaceRoot 
     return await fsSafeRoot(rootDir, {
       hardlinks: "reject",
       maxBytes: WORKSPACE_PREVIEW_MAX_BYTES,
-      nonBlockingRead: true,
       symlinks: "reject",
     });
   } catch {
