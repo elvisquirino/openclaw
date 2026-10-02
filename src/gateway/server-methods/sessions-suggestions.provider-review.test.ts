@@ -10,7 +10,6 @@ import {
   loadSessionEntry,
   upsertSessionEntryCore,
 } from "../../config/sessions/session-accessor.js";
-import * as metadataWrites from "../../config/sessions/session-metadata-write.async.js";
 import {
   addSessionSuggestion,
   listSessionSuggestions,
@@ -39,6 +38,8 @@ describe("suggestions queued behind provider review", () => {
     "preserves the lifecycle boundary for %s without replacing the session",
     async (action, { signal }) => {
       await withOpenClawTestState({ scenario: "minimal" }, async (state) => {
+        const metadataWrites =
+          await import("../../config/sessions/session-metadata-write.async.js");
         const scope = { agentId: "main", sessionKey, env: state.env };
         await upsertSessionEntryCore(scope, {
           sessionId: "provider-review-suggestion",
