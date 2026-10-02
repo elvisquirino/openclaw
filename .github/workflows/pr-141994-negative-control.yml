@@ -16,8 +16,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-          sparse-checkout: pr-141994-negative-control.patch
-          sparse-checkout-cone-mode: false
       - name: Retain proof patch outside the candidate checkout
         run: cp pr-141994-negative-control.patch "$RUNNER_TEMP/negative-control.patch"
       - name: Checkout exact reviewed candidate
@@ -25,7 +23,6 @@ jobs:
         with:
           ref: b45b6c65e3502cac57703ba76cf2d061b84a6cc6
           persist-credentials: false
-          sparse-checkout: ""
       - name: Verify candidate and restore the pre-fix mutable snapshot
         run: |
           test "$(git rev-parse HEAD)" = b45b6c65e3502cac57703ba76cf2d061b84a6cc6
