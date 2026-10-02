@@ -48,7 +48,7 @@ jobs:
             --repo-root . \
             --output-dir "${output_dir}" \
             --provider-mode mock-openai \
-            --scenario matrix-dm-thread-reply-override \
+            --scenario matrix-thread-root-preservation \
             --fast \
             --fail-fast
 
