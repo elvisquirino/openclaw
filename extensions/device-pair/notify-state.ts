@@ -13,7 +13,7 @@ export type NotifySubscription = {
   messageThreadId?: string | number;
   mode: "persistent" | "once";
   addedAtMs: number;
-  /** Unique for new arms; absent only on subscriptions imported from legacy state. */
+  /** Makes repeated writes in the same millisecond distinct to store comparisons. */
   armId?: string;
 };
 
@@ -43,7 +43,7 @@ function normalizeNotifyThreadKey(messageThreadId?: string | number): string {
   }
 }
 
-export function notifySubscriberKey(subscriber: {
+function notifySubscriberKey(subscriber: {
   to: string;
   accountId?: string;
   messageThreadId?: string | number;

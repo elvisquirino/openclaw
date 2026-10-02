@@ -477,7 +477,7 @@ describe("device-pair notify persistence", () => {
     await service.stop();
   });
 
-  it("preserves a one-shot subscription re-armed during its delivery", async () => {
+  it("preserves a same-millisecond re-arm during delivery without sending the next request", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const firstSend = createDeferred<unknown>();
@@ -502,6 +502,12 @@ describe("device-pair notify persistence", () => {
           publicKey: "public-key-1",
           ts: 2_000,
         },
+        {
+          requestId: "request-2",
+          deviceId: "device-2",
+          publicKey: "public-key-2",
+          ts: 2_001,
+        },
       ],
       paired: [],
     });
@@ -513,6 +519,7 @@ describe("device-pair notify persistence", () => {
       await storage.waitFor(sendEntered.promise);
       expect(sendText).toHaveBeenCalledTimes(1);
 
+      vi.setSystemTime(1_000);
       await handleNotifyCommand({
         api,
         ctx: { channel: "telegram", senderId: "chat-123" },
@@ -521,13 +528,15 @@ describe("device-pair notify persistence", () => {
       firstSend.resolve({ channel: "telegram", to: "chat-123" });
       await storage.requestStored("request-1");
       await vi.advanceTimersByTimeAsync(0);
+      await service.stop();
+      expect(sendText).toHaveBeenCalledTimes(1);
 
       await expect(
         openSubscriberStore().lookup(notifySubscriberStoreKey({ to: "chat-123" })),
       ).resolves.toMatchObject({
         to: "chat-123",
         mode: "once",
-        addedAtMs: 11_000,
+        addedAtMs: 1_000,
       });
     } finally {
       firstSend.resolve({ channel: "telegram", to: "chat-123" });
@@ -575,18 +584,15 @@ describe("device-pair notify persistence", () => {
     }
   });
 
-  it("delivers a one-shot subscription to only the first new request", async () => {
+  it("delivers a persisted one-shot without an arm nonce to only the first new request", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const sendText = vi.fn(async () => ({ channel: "telegram", to: "chat-123" }));
     const storage = observeNotifyStorage();
     const api = createApi(sendText, storage.openKeyedStore);
     api.logger.warn = storage.pollFailed;
-    await handleNotifyCommand({
-      api,
-      ctx: { channel: "telegram", senderId: "chat-123" },
-      action: "once",
-    });
+    const subscriber: NotifySubscription = { to: "chat-123", mode: "once", addedAtMs: 1_000 };
+    await openSubscriberStore().register(notifySubscriberStoreKey(subscriber), subscriber);
     listDevicePairingMock.mockResolvedValue({
       pending: [
         {

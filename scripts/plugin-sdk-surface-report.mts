@@ -185,14 +185,14 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
     ),
     publicExports: readPluginSdkSurfaceBudgetEnv(
       "OPENCLAW_PLUGIN_SDK_MAX_PUBLIC_EXPORTS",
-      // +1: createChannelSecretContract consolidates seven channel secret contracts (approved by Peter, 2026-10-01).
-      3758,
+      // +11: ten service-lifetime type exports and the owner-bound scheduler resolver.
+      3769,
       env,
     ),
     publicFunctionExports: readPluginSdkSurfaceBudgetEnv(
       "OPENCLAW_PLUGIN_SDK_MAX_PUBLIC_FUNCTION_EXPORTS",
-      // +1: createChannelSecretContract consolidates seven channel secret contracts (approved by Peter, 2026-10-01).
-      2187,
+      // +1: resolvePluginServiceScheduler borrows an existing service/account/CLI owner.
+      2188,
       env,
     ),
     publicDeprecatedExports: readPluginSdkSurfaceBudgetEnv(

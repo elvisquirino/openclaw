@@ -11,7 +11,6 @@ import {
   DEVICE_PAIR_NOTIFY_SUBSCRIBER_MAX_ENTRIES,
   DEVICE_PAIR_NOTIFY_SUBSCRIBER_NAMESPACE,
   notifyRequestStoreKey,
-  notifySubscriberKey,
   notifySubscriberStoreKey,
   type NotifySeenRequest,
   type NotifySubscription,
@@ -155,44 +154,6 @@ async function registerNotifySubscriber(params: {
   return true;
 }
 
-function isSameNotifySubscription(
-  current: NotifySubscription,
-  expected: NotifySubscription,
-): boolean {
-  if (expected.armId) {
-    return current.armId === expected.armId;
-  }
-  // Doctor-imported legacy subscriptions have no arm id. Their original
-  // fields remain the exact generation until a new arm replaces the row.
-  return (
-    current.armId === undefined &&
-    current.mode === expected.mode &&
-    current.addedAtMs === expected.addedAtMs &&
-    notifySubscriberKey(current) === notifySubscriberKey(expected)
-  );
-}
-
-async function deleteDeliveredNotifySubscription(
-  store: NotifySubscriberStore,
-  key: string,
-  delivered: NotifySubscription,
-): Promise<void> {
-  let observation = await store.observe(key);
-  for (;;) {
-    const result = await store.compareAndApply(key, observation.comparison, {
-      operation: "delete",
-      action:
-        observation.value && isSameNotifySubscription(observation.value, delivered)
-          ? "delete"
-          : "keep",
-    });
-    if (result.status !== "conflict") {
-      return;
-    }
-    observation = result.current;
-  }
-}
-
 function buildPairingRequestNotificationText(request: PendingPairingRequest): string {
   const label = normalizeOptionalString(request.displayName) || request.deviceId;
   const platform = normalizeOptionalString(request.platform);
@@ -237,39 +198,6 @@ function shouldNotifySubscriberForRequest(
   return ts >= subscriber.addedAtMs;
 }
 
-async function notifySubscriber(params: {
-  api: OpenClawPluginApi;
-  subscriber: NotifySubscription;
-  text: string;
-}): Promise<boolean> {
-  const adapter = await params.api.runtime.channel.outbound.loadAdapter("telegram");
-  const send = adapter?.sendText;
-  if (!send) {
-    params.api.logger.warn(
-      "device-pair: telegram outbound adapter unavailable for pairing notifications",
-    );
-    return false;
-  }
-
-  try {
-    await send({
-      cfg: params.api.config,
-      to: params.subscriber.to,
-      text: params.text,
-      ...(params.subscriber.accountId ? { accountId: params.subscriber.accountId } : {}),
-      ...(params.subscriber.messageThreadId != null
-        ? { threadId: params.subscriber.messageThreadId }
-        : {}),
-    });
-    return true;
-  } catch (err) {
-    params.api.logger.warn(
-      `device-pair: failed to send pairing notification to ${params.subscriber.to}: ${formatErrorMessage(err)}`,
-    );
-    return false;
-  }
-}
-
 async function notifyPendingPairingRequests(params: { api: OpenClawPluginApi }): Promise<void> {
   const subscriberStore = openNotifySubscriberStore(params.api);
   const seenRequestStore = openNotifySeenRequestStore(params.api);
@@ -310,24 +238,44 @@ async function notifyPendingPairingRequests(params: { api: OpenClawPluginApi }):
       const text = buildPairingRequestNotificationText(request);
       let delivered = false;
       for (const entry of subscribers) {
-        const subscriber = entry.value;
-        if (subscriber.mode === "once" && deliveredOneShots.has(entry.key)) {
+        if (deliveredOneShots.has(entry.key)) {
           continue;
         }
-        if (!shouldNotifySubscriberForRequest(subscriber, request)) {
+        const adapter = await params.api.runtime.channel.outbound.loadAdapter("telegram");
+        const send = adapter?.sendText;
+        if (!send) {
+          params.api.logger.warn(
+            "device-pair: telegram outbound adapter unavailable for pairing notifications",
+          );
           continue;
         }
-        const sent = await notifySubscriber({
-          api: params.api,
-          subscriber,
-          text,
-        });
-        delivered = delivered || sent;
-        if (sent && subscriber.mode === "once") {
+        const observation = await subscriberStore.observe(entry.key);
+        const subscriber = observation.value;
+        if (!subscriber || !shouldNotifySubscriberForRequest(subscriber, request)) {
+          continue;
+        }
+        try {
+          await send({
+            cfg: params.api.config,
+            to: subscriber.to,
+            text,
+            ...(subscriber.accountId ? { accountId: subscriber.accountId } : {}),
+            ...(subscriber.messageThreadId != null ? { threadId: subscriber.messageThreadId } : {}),
+          });
+        } catch (err) {
+          params.api.logger.warn(
+            `device-pair: failed to send pairing notification to ${subscriber.to}: ${formatErrorMessage(err)}`,
+          );
+          continue;
+        }
+        delivered = true;
+        if (subscriber.mode === "once") {
           deliveredOneShots.add(entry.key);
-          // Delivery is fallible and uncancellable. Delete only the exact arm
-          // that was sent so an overlapping re-arm remains subscribed.
-          await deleteDeliveredNotifySubscription(subscriberStore, entry.key, subscriber);
+          // A changed row belongs to its writer; never recapture it after delivery.
+          await subscriberStore.compareAndApply(entry.key, observation.comparison, {
+            operation: "delete",
+            action: "delete",
+          });
         }
       }
 
