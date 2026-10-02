@@ -3,7 +3,7 @@ import "../../test-utils/prepare-compiled-subprocesses.js";
 import { expectDefined } from "@openclaw/normalization-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UpdateScheduleState } from "../../../packages/gateway-protocol/src/index.js";
-import { awaitGateBeforeSettlement, createDeferred } from "../../../test/helpers/promise.js";
+import { createDeferred } from "../../../test/helpers/promise.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { RespawnSupervisor } from "../../infra/supervisor-markers.js";
 import type { UpdateCampaignController } from "../../infra/update-campaign.js";
@@ -32,6 +32,7 @@ let currentCampaignId: string | undefined;
 let updateSchedule: UpdateScheduleState | null;
 let updateChannel: "stable" | "beta" | "dev" | null;
 const versionMock = vi.hoisted(() => ({ value: "1.0.0" }));
+const sentinelAdmission = vi.hoisted((): { beforeGrant?: (stage: string) => void } => ({}));
 type UpdateCampaignAdoption = ReturnType<UpdateCampaignController["adopt"]>;
 
 const adoptCampaignMock = vi.fn<() => UpdateCampaignAdoption>(() => ({
@@ -77,7 +78,11 @@ const cancelManagedServiceUpdateHandoffMock = vi.fn<
 >(async () => "restored-in-process");
 const scheduleGatewayRestartMock = vi.fn(() => ({ scheduled: true }));
 const logGatewayInfoMock = vi.fn();
-const writeRestartSentinelMock = vi.fn(async () => undefined);
+const writeRestartSentinelMock = vi.fn<
+  (
+    ...args: Parameters<typeof import("../../infra/restart-sentinel.js").writeRestartSentinel>
+  ) => Promise<unknown>
+>(async () => undefined);
 const recordLatestUpdateRestartSentinelMock = vi.fn();
 
 vi.mock("../../config/commands.flags.js", () => ({
@@ -108,6 +113,21 @@ vi.mock("../../infra/restart-sentinel.js", async () => {
   return {
     ...actual,
     writeRestartSentinel: writeRestartSentinelMock,
+  };
+});
+
+vi.mock("../../infra/sqlite-worker-store.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../infra/sqlite-worker-store.js")>();
+  return {
+    ...actual,
+    createSqliteWorkerWriteAdmission: (
+      assertCurrent: Parameters<typeof actual.createSqliteWorkerWriteAdmission>[0],
+      nativeLocations: readonly string[],
+    ) =>
+      actual.createSqliteWorkerWriteAdmission((request) => {
+        sentinelAdmission.beforeGrant?.(request.stage);
+        assertCurrent(request);
+      }, nativeLocations),
   };
 });
 
@@ -362,6 +382,10 @@ function expectNoUpdateMutation(): void {
 
 describe("update.run campaign ownership", () => {
   it("pins a directly applied package campaign to its announced version", async () => {
+    const sentinel = await vi.importActual<typeof import("../../infra/restart-sentinel.js")>(
+      "../../infra/restart-sentinel.js",
+    );
+    writeRestartSentinelMock.mockImplementationOnce(sentinel.writeRestartSentinel);
     updateChannel = "beta";
     mockPackageInstallSurface("global");
 
@@ -370,6 +394,9 @@ describe("update.run campaign ownership", () => {
     expect(startManagedServiceUpdateHandoffMock).toHaveBeenCalledWith(
       expect.objectContaining({ channel: "beta", tag: "2.0.0" }),
     );
+    await expect(sentinel.readRestartSentinel()).resolves.toMatchObject({
+      payload: { kind: "update", stats: { handoffId: "handoff-1" } },
+    });
     expect(logGatewayInfoMock).toHaveBeenCalledWith(
       expect.stringMatching(/^update\.run adopted campaign campaign-1 actor=control-ui /),
       { target: { kind: "package", version: "2.0.0" } },
@@ -756,29 +783,40 @@ describe("update.run campaign ownership", () => {
     );
   });
 
-  it("does not publish a retired campaign after a delayed sentinel write", async () => {
-    startManagedServiceUpdateHandoffMock.mockRejectedValueOnce(new Error("entrypoint unavailable"));
-    const started = createDeferred();
-    const release = createDeferred();
-    writeRestartSentinelMock.mockImplementationOnce(async () => {
-      started.resolve();
-      await release.promise;
-    });
-    const operation = invokeUpdateRun();
-    try {
-      await awaitGateBeforeSettlement(
-        started.promise,
-        operation,
-        "Update did not reach sentinel persistence",
+  it.each(["transaction", "commit"] as const)(
+    "preserves the durable sentinel when its campaign retires at %s admission",
+    async (stage) => {
+      const sentinel = await vi.importActual<typeof import("../../infra/restart-sentinel.js")>(
+        "../../infra/restart-sentinel.js",
       );
-      currentCampaignId = "campaign-2";
-    } finally {
-      release.resolve();
-      await operation;
-    }
-    expect(recordLatestUpdateRestartSentinelMock).not.toHaveBeenCalled();
-    expect(clearCampaignMock).not.toHaveBeenCalled();
-  });
+      const existing = await sentinel.writeRestartSentinel({
+        kind: "restart",
+        status: "ok",
+        ts: 1,
+        message: "Existing notification",
+      });
+      startManagedServiceUpdateHandoffMock.mockRejectedValueOnce(
+        new Error("entrypoint unavailable"),
+      );
+      writeRestartSentinelMock.mockImplementationOnce(sentinel.writeRestartSentinel);
+      const observed: string[] = [];
+      sentinelAdmission.beforeGrant = (requested) => {
+        observed.push(requested);
+        if (requested === stage) {
+          currentCampaignId = "campaign-2";
+        }
+      };
+      try {
+        await invokeUpdateRun();
+      } finally {
+        sentinelAdmission.beforeGrant = undefined;
+      }
+      expect(observed).toContain(stage);
+      await expect(sentinel.readRestartSentinel()).resolves.toEqual(existing);
+      expect(recordLatestUpdateRestartSentinelMock).not.toHaveBeenCalled();
+      expect(clearCampaignMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps the adopted campaign while a foreground update is accepted", async () => {
     await invokeUpdateRun();

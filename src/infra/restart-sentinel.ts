@@ -91,10 +91,12 @@ async function runRestartSentinelOperation<Key extends keyof RestartSentinelWork
 export async function writeRestartSentinel(
   payload: RestartSentinelPayload,
   env: NodeJS.ProcessEnv = process.env,
+  assertProducerCurrent?: () => void,
 ): Promise<RestartSentinel> {
   return runRestartSentinelOperation(
     { type: "restartSentinel.write", input: payload },
     captureOpenClawStateWorkerContext({ env }),
+    assertProducerCurrent,
   );
 }
 

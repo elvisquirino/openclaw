@@ -637,7 +637,11 @@ export const updateHandlers: GatewayRequestHandlers = {
     let sentinelFailure: { error: unknown } | undefined;
     if (ownsUpdateOutcome) {
       try {
-        await writeRestartSentinel(payload);
+        await writeRestartSentinel(payload, undefined, () => {
+          if (!ownsAdoptedCampaign()) {
+            throw new Error("Update campaign retired before restart sentinel persistence");
+          }
+        });
         sentinelPersisted = true;
         if (ownsAdoptedCampaign()) {
           recordLatestUpdateRestartSentinel(payload);
