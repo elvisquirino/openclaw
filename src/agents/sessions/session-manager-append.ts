@@ -130,12 +130,15 @@ export class SessionManagerAppend extends SessionManagerSuffixPersistence {
       );
       try {
         this.assertTranscriptWriteActive();
-        assertNavigation();
         if (
           this.getSessionId() !== sessionId ||
           !sameSessionTranscriptTargetBinding(target, this.getSessionTarget())
         ) {
           throw new SessionTranscriptWriterClaimReboundError();
+        }
+        // A newer committed view owns navigation; this receipt will not replace it.
+        if (!this.hasNewerPublishedTranscriptView(committed.committedVersion)) {
+          assertNavigation();
         }
         return this.adoptWorkerCommittedEntry(canonical, committed, admittedUserId);
       } catch (cause) {
