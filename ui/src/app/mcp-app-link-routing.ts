@@ -1,7 +1,7 @@
 import { shouldHandleNavigationClick } from "../lib/navigation-click.ts";
 import type { ApplicationContext } from "./context.ts";
 
-export function looksLikeMcpAppLink(href: string): boolean {
+function looksLikeMcpAppLink(href: string): boolean {
   return /^(?:(?:codex|chatgpt|openclaw):\/\/plugins\/|https:\/\/chatgpt\.com\/plugins\/)[^/?#]+\/app\/[^/?#]+\/?(?:[?#]|$)/iu.test(
     href,
   );

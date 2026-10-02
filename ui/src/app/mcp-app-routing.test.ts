@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mcpAppRouteFromSearch, parseMcpAppLink } from "../lib/mcp-app-route.ts";
-import { looksLikeMcpAppLink, startMcpAppRouting } from "./mcp-app-link-routing.ts";
+import { startMcpAppRouting } from "./mcp-app-link-routing.ts";
 
 describe("MCP app link routing", () => {
   let cleanup: (() => void) | undefined;
@@ -85,7 +85,18 @@ describe("MCP app link routing", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("admits accepted parser fixtures and rejects ordinary links with the eager probe", () => {
+  it("intercepts accepted parser fixtures and leaves ordinary links alone", () => {
+    const navigate = vi.fn();
+    cleanup = startMcpAppRouting({ navigate }).dispose;
+    const clickIsIntercepted = (href: string) => {
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      document.body.append(anchor);
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+      const defaultAllowed = anchor.dispatchEvent(click);
+      anchor.remove();
+      return !defaultAllowed;
+    };
     for (const href of [
       "codex://plugins/parts%40work/app/cad%2Flibrary?path=%2Fparts%3Ftag%3Dbolt%26sort%3Dasc",
       "https://chatgpt.com/plugins/parts/app/cad.library",
@@ -98,9 +109,7 @@ describe("MCP app link routing", () => {
       "https://chatgpt.com/plugins/parts/app/cad.library/?path=%2Fparts",
     ]) {
       expect(parseMcpAppLink(href)).not.toBeNull();
-      const anchor = document.createElement("a");
-      anchor.href = href;
-      expect(looksLikeMcpAppLink(anchor.href)).toBe(true);
+      expect(clickIsIntercepted(href)).toBe(true);
     }
     for (const href of [
       "https://example.com/x",
@@ -111,7 +120,7 @@ describe("MCP app link routing", () => {
       "https://chatgpt.com/plugins/",
       "https://chatgpt.com/plugins/x/app",
     ]) {
-      expect(looksLikeMcpAppLink(href)).toBe(false);
+      expect(clickIsIntercepted(href)).toBe(false);
     }
   });
 
