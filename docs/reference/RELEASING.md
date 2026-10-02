@@ -84,10 +84,9 @@ Blocking jobs include the CI coverage gate, seal/evidence,
 Build Artifacts, install smoke, survivor lanes, `update-first-hop-compat*`, pack/npm
 qualification, package integrity, and all Linux/Windows/macOS Gateway checks,
 including Windows packaged install/upgrade checks in Release Checks. A cancelled
-run still blocks. A failed CI gate is accepted only when its own log proves that
-every non-passing entry selected a failed advisory job; missing, skipped, or
-cancelled coverage blocks. Publication waivers cannot bypass failures or required
-coverage. Validation covers source CI, packages, plugins,
+run still blocks. The selected `openclaw/ci-gate` must succeed; failed, missing,
+skipped, or cancelled coverage blocks. Publication waivers cannot bypass failures
+or required coverage. Validation covers source CI, packages, plugins,
 Gateway installs and upgrades, and selected app, UI, Telegram, QA, and
 live-provider checks. All-group qualification includes all nine Gateway
 install/upgrade combinations across Linux, Windows, and macOS. Coverage otherwise
