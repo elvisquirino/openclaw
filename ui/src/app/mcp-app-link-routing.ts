@@ -2,7 +2,7 @@ import { shouldHandleNavigationClick } from "../lib/navigation-click.ts";
 import type { ApplicationContext } from "./context.ts";
 
 export function looksLikeMcpAppLink(href: string): boolean {
-  return /^(?:(?:codex|chatgpt|openclaw):\/\/plugins\/|https:\/\/chatgpt\.com\/plugins\/)/iu.test(
+  return /^(?:(?:codex|chatgpt|openclaw):\/\/plugins\/|https:\/\/chatgpt\.com\/plugins\/)[^/?#]+\/app\/[^/?#]+\/?(?:[?#]|$)/iu.test(
     href,
   );
 }
@@ -23,8 +23,8 @@ export function startMcpAppRouting(context: Pick<ApplicationContext, "navigate">
     if (!looksLikeMcpAppLink(href)) {
       return;
     }
-    // Chat links use target=_blank by default. Malformed plugin links that pass
-    // this probe are dropped if strict parsing fails, rather than opening a browser.
+    // Chat links use target=_blank by default. Shape matches that fail strict parsing
+    // (userinfo, port, bad deep link, control characters) are dropped; other links navigate normally.
     event.preventDefault();
     void import("./mcp-app-routing.ts")
       .then(({ navigateMcpAppLink }) => {

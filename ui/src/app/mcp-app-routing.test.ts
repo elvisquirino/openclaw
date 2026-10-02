@@ -56,6 +56,9 @@ describe("MCP app link routing", () => {
       "mailto:hello@example.com",
       "/relative",
       "https://chatgpt.com/other",
+      "https://chatgpt.com/plugins/parts",
+      "https://chatgpt.com/plugins/",
+      "https://chatgpt.com/plugins/x/app",
     ]) {
       anchor.href = href;
       const event = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
@@ -91,6 +94,8 @@ describe("MCP app link routing", () => {
       "openclaw://plugins/parts/app/cad.library",
       "HTTPS://CHATGPT.COM:443/plugins/parts/app/cad.library",
       "CODEX://plugins/parts/app/cad.library",
+      "openclaw://plugins/parts/app/cad.library/?path=%2Fparts",
+      "https://chatgpt.com/plugins/parts/app/cad.library/?path=%2Fparts",
     ]) {
       expect(parseMcpAppLink(href)).not.toBeNull();
       const anchor = document.createElement("a");
@@ -102,6 +107,9 @@ describe("MCP app link routing", () => {
       "mailto:hello@example.com",
       "/relative",
       "https://chatgpt.com/other",
+      "https://chatgpt.com/plugins/parts",
+      "https://chatgpt.com/plugins/",
+      "https://chatgpt.com/plugins/x/app",
     ]) {
       expect(looksLikeMcpAppLink(href)).toBe(false);
     }
