@@ -483,11 +483,12 @@ export function normalizeLegacySessionEntryDelivery(entry: SessionEntry): Sessio
 export function normalizeLegacySessionEntryDelivery(
   entry: Record<string, unknown>,
 ): Record<string, unknown>;
-export function normalizeLegacySessionEntryDelivery(entry: SessionEntry | Record<string, unknown>) {
-  assertSupportedSessionStoreEntry(entry);
-  if (isRecord(entry) && hasLegacySessionProviderState(entry)) {
-    entry = migrateLegacySessionEntryState(entry);
-  }
+export function normalizeLegacySessionEntryDelivery(value: SessionEntry | Record<string, unknown>) {
+  assertSupportedSessionStoreEntry(value);
+  const entry =
+    isRecord(value) && hasLegacySessionProviderState(value)
+      ? migrateLegacySessionEntryState(value)
+      : value;
   const legacy = entry as LegacySessionDeliveryEntry;
   const hasLegacyFields = LEGACY_SESSION_DELIVERY_KEYS.some((key) => key in legacy);
   if (isCanonicalSessionDeliveryState(entry.delivery) && !hasLegacyFields) {
