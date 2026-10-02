@@ -162,6 +162,7 @@ describe("session sharing store", () => {
       addSessionMember(scope, { identityId: "guest", addedBy: "owner", addedAt: 2 });
       const databasePath = resolveOpenClawAgentSqlitePath({ agentId: scope.agentId, env });
       const missingPath = resolveOpenClawAgentSqlitePath({ agentId: missingScope.agentId, env });
+      await closeOpenClawAgentDatabasesAsync();
       closeOpenClawAgentDatabasesForTest();
 
       expect(listSessionMembers(scope)).toEqual([
