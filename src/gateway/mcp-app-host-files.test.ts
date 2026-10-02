@@ -1,7 +1,8 @@
+import { watchFile, writeFileSync } from "node:fs";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createDeferred } from "../../test/helpers/promise.js";
+import { createDeferred, withinTest } from "../../test/helpers/promise.js";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import type { SessionMcpRuntime } from "../agents/agent-bundle-mcp-types.js";
 import { fetchMcpAppView, getMcpAppViewLease } from "../agents/mcp-ui-resource.js";
@@ -9,6 +10,10 @@ import { testing as viewTesting } from "../agents/mcp-ui-resource.test-support.j
 import type { GatewayRequestHandlerOptions } from "./server-methods/types.js";
 
 const state = vi.hoisted(() => ({ root: "", sessionId: "session-1" }));
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, watchFile: vi.fn(actual.watchFile) };
+});
 vi.mock("./operator-role-policy.js", () => ({ resolveGatewayOperatorRoleActor: () => undefined }));
 vi.mock("./server-methods/session-scoped-read.js", () => ({
   retainSessionScopedRead: () => undefined,
@@ -202,30 +207,93 @@ describe("registered MCP App host-file routes", () => {
     expect((await invoke("mcp.app.readResource", { uri }))[0]).toBe(false);
   });
 
-  it("publishes atomic replacements and subsequent writes to the replacement file", async () => {
-    let notified = createDeferred();
+  it.each(["atomic replacement", "rename gap"])(
+    "publishes after %s and subsequent writes",
+    async (kind) => {
+      let notified = createDeferred();
+      publish.mockImplementation(() => notified.resolve());
+      expect((await invoke("mcp.app.subscribeResource", { uri }))[0]).toBe(true);
+      const file = path.join(state.root, "part.stl");
+      if (kind === "rename gap") {
+        await rename(file, `${file}.bak`);
+        await notified.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(getMcpAppViewLease(viewId, runtime)?.disposeCallbacks?.size).toBe(1);
+        notified = createDeferred();
+        publish.mockClear();
+        await writeFile(file, "solid replacement");
+      } else {
+        await writeFile(`${file}.tmp`, "solid replacement");
+        await rename(`${file}.tmp`, file);
+      }
+      await notified.promise;
+      expect(publish).toHaveBeenCalledWith(
+        "mcp.app.resourceUpdated",
+        { viewId, uri },
+        new Set(["alice"]),
+      );
+      notified = createDeferred();
+      publish.mockClear();
+      await writeFile(file, "solid updated replacement");
+      await notified.promise;
+      expect(publish).toHaveBeenCalledWith(
+        "mcp.app.resourceUpdated",
+        { viewId, uri },
+        new Set(["alice"]),
+      );
+      connection.abort();
+      expect(getMcpAppViewLease(viewId, runtime)?.disposeCallbacks?.size).toBe(0);
+    },
+  );
+
+  it("stops polling when the connection closes during a rename gap", async () => {
+    const polling = vi.mocked(watchFile).mockClear();
+    const notified = createDeferred();
     publish.mockImplementation(() => notified.resolve());
     expect((await invoke("mcp.app.subscribeResource", { uri }))[0]).toBe(true);
     const file = path.join(state.root, "part.stl");
-    await writeFile(`${file}.tmp`, "solid replacement");
-    await rename(`${file}.tmp`, file);
+    await rename(file, `${file}.bak`);
     await notified.promise;
-    expect(publish).toHaveBeenCalledWith(
-      "mcp.app.resourceUpdated",
-      { viewId, uri },
-      new Set(["alice"]),
-    );
-    notified = createDeferred();
+    const poller = polling.mock.results[0]?.value;
+    expect(poller).toBeDefined();
+    const stopped = createDeferred();
+    poller.once("stop", () => stopped.resolve());
     publish.mockClear();
-    await writeFile(file, "solid updated replacement");
-    await notified.promise;
+    connection.abort();
+    await stopped.promise;
+    expect(getMcpAppViewLease(viewId, runtime)?.disposeCallbacks?.size).toBe(0);
+    await writeFile(file, "solid replacement after abort");
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("rearms when the file returns before the poller's initial stat", async ({ signal }) => {
+    const file = path.join(state.root, "part.stl");
+    const stopped = createDeferred();
+    const { watchFile: realWatchFile } = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.mocked(watchFile).mockImplementationOnce((...args) => {
+      writeFileSync(file, "solid replacement before polling starts");
+      const poller = realWatchFile(...args);
+      poller.once("stop", () => stopped.resolve());
+      return poller;
+    });
+    expect((await invoke("mcp.app.subscribeResource", { uri }))[0]).toBe(true);
+    await rename(file, `${file}.bak`);
+    await withinTest(stopped.promise, signal);
     expect(publish).toHaveBeenCalledWith(
       "mcp.app.resourceUpdated",
       { viewId, uri },
       new Set(["alice"]),
     );
-    connection.abort();
-    expect(getMcpAppViewLease(viewId, runtime)?.disposeCallbacks?.size).toBe(0);
+    const notified = createDeferred();
+    publish.mockClear();
+    publish.mockImplementation(() => notified.resolve());
+    await writeFile(file, "solid updated replacement");
+    await withinTest(notified.promise, signal);
+    expect(publish).toHaveBeenCalledWith(
+      "mcp.app.resourceUpdated",
+      { viewId, uri },
+      new Set(["alice"]),
+    );
   });
 
   it("registers and removes subscriptions through the same view authority", async () => {

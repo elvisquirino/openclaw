@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { watch } from "node:fs";
+import { type Stats, stat, unwatchFile, watch, watchFile } from "node:fs";
 import path from "node:path";
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import {
@@ -324,23 +324,39 @@ export async function subscribeMcpAppHostFile(
       }
     };
     // Watch the file: macOS FSEvents directory watches can drop events under load.
+    // Bridge rename gaps with stat polling bounded to absence and subscription lifetime.
+    const filePath = path.join(file.rootDir, file.path);
+    let polling = false;
     const arm = () =>
-      watch(path.join(file.rootDir, file.path), { persistent: false }, (event) => {
+      watch(filePath, { persistent: false }, (event) => {
         if (event === "rename") {
           watcher.close();
           rearm();
         }
         void notify();
       }).on("error", close);
-    const rearm = (retry = true) => {
-      if (closed) {
+    const rearm = (curr?: Stats) => {
+      if (closed || (curr && (!polling || !curr.isFile()))) {
         return;
       }
+      polling = false;
+      unwatchFile(filePath, rearm);
       try {
         watcher = arm();
+        if (curr) {
+          void notify();
+        }
       } catch (error) {
-        if (retry && hasErrnoCode(error, "ENOENT")) {
-          setImmediate(() => rearm(false));
+        if (hasErrnoCode(error, "ENOENT")) {
+          polling = true;
+          watchFile(filePath, { persistent: false, interval: 250 }, rearm);
+          stat(filePath, (error, curr) => {
+            if (!error) {
+              rearm(curr);
+            } else if (!hasErrnoCode(error, "ENOENT")) {
+              close();
+            }
+          });
         } else {
           close();
         }
@@ -352,6 +368,7 @@ export async function subscribeMcpAppHostFile(
       }
       closed = true;
       watcher.close();
+      unwatchFile(filePath, rearm);
       client.connectionSignal?.removeEventListener("abort", close);
       if (watchers.get(connId) === close) {
         watchers.delete(connId);
