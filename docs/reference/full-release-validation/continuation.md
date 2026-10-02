@@ -182,7 +182,7 @@ for that job.
 ### Automatic retries for declared flakes
 
 Automatic test retries are disabled. Unclassified failed or timed out jobs
-outside `windows-node-ci` remain blockers; `known_flaky_jobs_json` is rejected
+remain blockers; `known_flaky_jobs_json` is rejected
 on new dispatches. Inspect the original failure before requesting another execution. The
 explicit `frv rerun` and `frv continue --failed` commands remain operator recovery
 operations and never run as an automatic response to a test outcome.
@@ -190,7 +190,7 @@ operations and never run as an automatic response to a test outcome.
 Published artifacts may contain empty `knownFlakyJobs` and `automaticRetries`
 fields. Readers retain their original plan digest and reject nonempty allowances
 or retry records. Current qualification requires successful selected results
-or validated `windows-node-ci`/`recorded-flake` evidence. Retired waivers and
+or validated `recorded-flake` evidence. Retired waivers and
 pre-declared advisory failure allowances remain rejected and must
 be replaced with a fresh qualifying run; it cannot authorize publication.
 

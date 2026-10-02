@@ -102,8 +102,9 @@ Record and reuse the full trusted Tooling SHA. Beta-publish uses
 `release_profile=beta`, `run_release_soak=false` (`npm-beta-v1` for a qualifying
 canonical beta target). Stable-publish requires `release_profile=stable` or
 `full`, soak, and blocking performance. Beta-profile evidence cannot qualify
-stable. Every selected validation lane except policy-owned `windows-node-ci`
-and authenticated `recorded-flake` jobs in `normalCi` must pass.
+stable. Every selected validation lane except authenticated `recorded-flake`
+jobs in `normalCi` must pass. Windows Node shards are not eligible for that
+classification and must pass.
 See [shared release boundaries](../SKILL.md#shared-release-boundaries),
 [validation](validation.md), and
 [publication recovery](publication-recovery.md). Diagnose
@@ -374,7 +375,7 @@ Run [postpublish confidence](validation.md#postpublish-confidence) against the
 exact published package. For a beta-to-latest promotion, retain available
 deferred-lane results, including published-package Telegram, while enforcing
 the shared required publication proofs. All selected tests outside the
-`windows-node-ci` and authenticated `recorded-flake` classes must pass before publication; retain advisory
+authenticated `recorded-flake` class must pass before publication; retain advisory
 failures in the release evidence. Run safe
 independent rosters concurrently while controlling local Docker/VM load.
 Classify failures before admitting a fix to the next beta; do not scan moving

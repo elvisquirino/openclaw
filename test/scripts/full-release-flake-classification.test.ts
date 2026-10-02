@@ -321,7 +321,7 @@ describe("authenticated FRV flake classification", () => {
 });
 
 describe("receipt discovery scope", () => {
-  it("skips lookups for policy-advisory Windows shards and scopes discovery to the child run", async () => {
+  it("skips lookups for mandatory Windows shards and scopes discovery to the child run", async () => {
     const windowsJob = { ...fixture().job, name: "checks-windows-node-3" };
     const api = vi.fn<FlakeApi>(async (path) => {
       if (path === "actions/runs/200") {

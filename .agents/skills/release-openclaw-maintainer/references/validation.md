@@ -112,9 +112,9 @@ also defers Package Acceptance Telegram, broad live/E2E, QA-live and Parallels.
 Package Telegram deferral applies to beta-profile `main` too, but it does not
 qualify for `npm-beta-v1`.
 
-FRV `normalCi` Windows Node shards are policy-advisory (`windows-node-ci`).
 Eligible `normalCi` failures with authenticated `recorded-flake` receipts are
-also advisory; all other selected failures block. Decide blocker or flake for
+advisory; all other selected failures block. Windows Node shards are not
+eligible for classification and must pass. Decide blocker or flake for
 every failure, rerun flakes on the same Release SHA at most twice, and file a
 fix-in-parallel issue/PR on `main`. Do not re-cut, change tooling, or start another
 FRV for a flake. See the [CI skill](../../release-openclaw-ci/SKILL.md#publication-requirements).

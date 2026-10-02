@@ -15,9 +15,9 @@ confirmed product failure changes the Code SHA. Use one diagnosis, one fix when
 needed, and one narrow retry, then reassess; do not automatically rerun `all`.
 Narrow evidence is not publish authorization by itself.
 
-Decide blocker or flake for every failed test. Retain `windows-node-ci` advisory
-failures and authenticated `recorded-flake` receipts for eligible `normalCi` jobs
-in the manifest. Recorded flakes retain their exact job URL/attempt, reason,
+Decide blocker or flake for every failed test. Retain authenticated
+`recorded-flake` receipts for eligible `normalCi` jobs in the manifest. Recorded
+flakes retain their exact job URL/attempt, reason,
 tracking issue or PR, classifier run, and CI gate entries; step summaries and
 release verification notes expose the decision. Other children stay strict.
 See [record a flake](/reference/full-release-validation/continuation#record-a-flake).

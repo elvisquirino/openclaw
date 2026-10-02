@@ -26,24 +26,6 @@ import { classifyReleaseTrain, parseReleaseVersion } from "./lib/release-version
 
 export { MAX_RELEASE_ARTIFACT_BYTES, serializeReleaseArtifact };
 
-// CI's dependency-free shell gate is pinned to this class by its workflow tests.
-export const WINDOWS_NODE_CI_ADVISORY = Object.freeze({
-  id: "windows-node-ci",
-  child: "normalCi",
-  jobNamePattern: /^checks-windows-node-.+$/u,
-  aggregateJob: "checks-windows",
-});
-
-function isWindowsNodeAdvisoryJob(child, job) {
-  return (
-    child.key === WINDOWS_NODE_CI_ADVISORY.child &&
-    typeof job.name === "string" &&
-    WINDOWS_NODE_CI_ADVISORY.jobNamePattern.test(job.name) &&
-    job.status === "completed" &&
-    ["failure", "timed_out"].includes(job.conclusion)
-  );
-}
-
 function recordedFlakeReceipt(child, job) {
   return child.flakeClassifications?.find((receipt) => {
     if (receipt.jobName !== job.name || receipt.jobUrl !== (job.html_url ?? job.url)) {
@@ -59,18 +41,17 @@ function recordedFlakeReceipt(child, job) {
 }
 
 function isAdvisoryJob(child, job) {
-  return isWindowsNodeAdvisoryJob(child, job) || Boolean(recordedFlakeReceipt(child, job));
+  return Boolean(recordedFlakeReceipt(child, job));
 }
 
 export function releaseAdvisoryJobs(children) {
   return children.flatMap((child) =>
     child.jobs.flatMap((job) => {
-      const windows = isWindowsNodeAdvisoryJob(child, job);
-      const receipt = windows ? undefined : recordedFlakeReceipt(child, job);
-      return windows || receipt
+      const receipt = recordedFlakeReceipt(child, job);
+      return receipt
         ? [
             {
-              class: windows ? WINDOWS_NODE_CI_ADVISORY.id : "recorded-flake",
+              class: "recorded-flake",
               child: child.key,
               job: job.name,
               conclusion: job.conclusion,
@@ -161,8 +142,9 @@ export function validateReleaseManifestAdvisoryJobs(manifest) {
       throw new Error("Release advisory child evidence is invalid");
     }
     if (
-      key === WINDOWS_NODE_CI_ADVISORY.child &&
-      (typeof child.runId !== "string" ||
+      child.flakeClassifications?.length &&
+      (key !== "normalCi" ||
+        typeof child.runId !== "string" ||
         !/^[1-9][0-9]*$/u.test(child.runId) ||
         child.runId !== manifest.childRuns?.normalCi)
     ) {

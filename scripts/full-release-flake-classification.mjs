@@ -16,7 +16,7 @@ const TRACKING_URL = /^https:\/\/github\.com\/openclaw\/openclaw\/(issues|pull)\
 const execFileAsync = promisify(execFile);
 
 export const RECORDED_FLAKE_DENIED_JOB_PATTERNS = Object.freeze([
-  // Policy-advisory windows-node-ci shards need no receipt or receipt lookup.
+  // Windows Node shards remain mandatory release gates.
   /^checks-windows-node-/u,
   /ci[- _/]gate/iu,
   /seal|evidence/iu,

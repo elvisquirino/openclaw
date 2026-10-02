@@ -68,8 +68,8 @@ Use this with `$release-openclaw-maintainer` and `$openclaw-testing` when a rele
   caller group; PR/main CI and unrelated scheduled work remain outside it.
 - Validate provider secrets before dispatching expensive full release matrices.
 - Check the nightly parent for the Code SHA before dispatching a fresh main validation; it seals per-child receipts that exact-target dispatches adopt when inputs match. The nightly runs this helper route (`--sha <main-sha> --workflow-sha <main-sha>`), so its parent runs on a `release-ci/<sha12>-<id>` branch, not `main`.
-- Every selected validation lane must pass except the policy-owned
-  `windows-node-ci` and authenticated `recorded-flake` classes in FRV's `normalCi` child; see
+- Every selected validation lane must pass except authenticated `recorded-flake`
+  classifications in FRV's `normalCi` child; see
   [Publication requirements](#publication-requirements). Stable tags require stable/full
   evidence, soak, and blocking performance. Beta-profile evidence cannot qualify
   stable. No lane or soak waiver bypasses these requirements. All-group
@@ -262,7 +262,7 @@ until their dependent enforcement changes land.
   release branch or beta tag records `coveragePolicy=npm-beta-v1`. It keeps
   Linux/macOS/Windows Node, Control UI, plugin, package, install/update,
   Linux/Windows/macOS cross-OS, QA parity, runtime-pair/restart, and tool coverage.
-  All selected tests except `windows-node-ci` and bound `recorded-flake` jobs gate npm/ClawHub. Native app
+  All selected tests except bound `recorded-flake` jobs gate npm/ClawHub. Native app
   CI, performance, and published-package Telegram are deferred to confidence.
   Beta `all` without soak also defers Package Acceptance Telegram, including
   beta-profile checks of `main`. Record deferred checks as not run,
@@ -581,14 +581,6 @@ Mutation owners recheck live publication authority, selectors, and immutable byt
 
 Publish with `release_profile=from-validation` to consume the sealed profile.
 Stable publication requires stable/full evidence, soak, and blocking performance.
-Windows Node unit-test CI shards (`checks-windows-node-*`) in the normal CI child
-(`normalCi`) are advisory for Release Decision and publication. The named
-`windows-node-ci` class belongs to `scripts/full-release-validation-policy.mjs`.
-Its failures stay visible in the decision, GitHub step summary, and release
-evidence manifest; validators and publish gates recheck the class and child.
-This is policy-derived, never an operator input or waiver. Ordinary PR, push,
-scheduled, and main CI keep Windows blocking.
-
 Decide blocker or flake for every failed test. Rerun flakes on the same Release
 SHA at most twice, file a fix-in-parallel issue/PR on `main`, and record eligible
 still-failing `normalCi` jobs through `full-release-flake-classification.yml` on
@@ -597,6 +589,8 @@ attempt, target SHA, actor, reason, and tracking link. Keep that failure visible
 never re-cut, change tooling, or start a new FRV for a flake. After the receipt
 succeeds, `frv continue --failed` reseals only the parent when no blockers remain.
 See [operator flow](../../../docs/reference/full-release-validation/continuation.md#record-a-flake).
+Windows Node shards are not eligible for recorded-flake classification and must
+pass before Release Decision and publication.
 
 Other children stay strict in v1; extending classification is follow-up work.
 Never classify CI coverage gates, seal/evidence, Build Artifacts, install smoke,
@@ -808,7 +802,7 @@ pnpm frv watch --run <full-release-run-id>
 It resolves child run IDs from the parent's dispatch-job log lines
 (`Dispatched <workflow>: <url> (attempt N)`), never from display titles, and
 reports each parent and child attempt transition and each failed job once, with
-runner labels and advisory Windows jobs marked. Transient GitHub 5xx or HTML
+runner labels. Transient GitHub 5xx or HTML
 error bodies are retried on the next poll, never reported as job results.
 State lives in `$TMPDIR/openclaw-frv/<repo>-<parent>-watch.json` (`--state`
 overrides), so a restart after a harness or Monitor timeout does not re-report.
@@ -863,8 +857,8 @@ Interpret state precisely:
   remained active.
 
 Read every selected lane's actual conclusion. `passed` requires all selected
-validation lanes outside `windows-node-ci` and authenticated `recorded-flake`
-jobs to succeed and retains the advisory
+validation lanes outside authenticated `recorded-flake` jobs to succeed and
+retains the advisory
 failures; omitted coverage is not run, never passed.
 
 The `full-release-diagnostics-<run-id>-<attempt>` artifact is the terminal
