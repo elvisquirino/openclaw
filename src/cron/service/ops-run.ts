@@ -33,7 +33,7 @@ import type { CronRunMode, CronServiceState, CronWakeMode } from "./state.js";
 import { isImmediateCronRunMode } from "./state.js";
 import { emitCronRunFinished, type ManualRunTerminalTracker } from "./timer-outcome-events.js";
 import { finalizeCompletedCronRunOutcomes } from "./timer-outcome-finalization.js";
-import { authorCronRunCompletion, executeJobCoreWithTimeout } from "./timer.js";
+import { armTimer, authorCronRunCompletion, executeJobCoreWithTimeout } from "./timer.js";
 import { wake } from "./wake.js";
 
 let nextManualRunId = 1;
@@ -92,28 +92,32 @@ async function finishPreparedManualRun(
       prepared.onTriggerDisposition(disposition);
     }
     finalizationStarted = true;
-    await finalizeCompletedCronRunOutcomes(state, [
-      {
-        ...coreResult,
-        jobId,
-        job: prepared.admittedJob,
-        taskRunId,
-        activeJobMarker: prepared.activeJobMarker,
-        reservationIdentity: prepared.reservationIdentity,
-        runReceipt: prepared.runReceipt,
-        runReceiptContext: prepared.runReceiptContext,
-        receiptSettlementDisposition,
-        startedAt,
-        endedAt: state.deps.nowMs(),
-        request: {
-          executionJob,
-          preserveCadence: isImmediateCronRunMode(mode),
-          scheduleOwnershipAtMs: prepared.scheduleOwnershipAtMs,
-          runId: prepared.runId,
-          terminalTracker: prepared.terminalTracker,
+    await finalizeCompletedCronRunOutcomes(
+      state,
+      [
+        {
+          ...coreResult,
+          jobId,
+          job: prepared.admittedJob,
+          taskRunId,
+          activeJobMarker: prepared.activeJobMarker,
+          reservationIdentity: prepared.reservationIdentity,
+          runReceipt: prepared.runReceipt,
+          runReceiptContext: prepared.runReceiptContext,
+          receiptSettlementDisposition,
+          startedAt,
+          endedAt: state.deps.nowMs(),
+          request: {
+            executionJob,
+            preserveCadence: isImmediateCronRunMode(mode),
+            scheduleOwnershipAtMs: prepared.scheduleOwnershipAtMs,
+            runId: prepared.runId,
+            terminalTracker: prepared.terminalTracker,
+          },
         },
-      },
-    ]);
+      ],
+      { onRequestedRunFinalized: () => armTimer(state) },
+    );
   } finally {
     if (!finalizationStarted) {
       // Callback failures can leave execution before the finalizer takes ownership.

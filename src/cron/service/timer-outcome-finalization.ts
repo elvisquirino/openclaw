@@ -25,12 +25,12 @@ import {
   recordCronOutcomeForJob,
 } from "./timer-outcome-events.js";
 import { applyOutcomeToAuthoritativeJob, applyOutcomeToStoredJob } from "./timer-outcomes.js";
-import { armTimer } from "./timer-scheduler.js";
 
 type CompletedCronRunOutcomeFinalizationOptions = {
   clearOnFailure?: boolean;
   discardWhenStopped?: boolean;
   repairFutureCronNextRunAtMs?: boolean;
+  onRequestedRunFinalized?: () => void;
 };
 
 /** Coalesces terminal cron writes without holding an execution admission slot. */
@@ -309,7 +309,7 @@ export async function finalizeCompletedCronRunOutcomes(
             isolatedAgentSetupTimeout: outcome.isolatedAgentSetupTimeout,
           });
         }
-        armTimer(state);
+        opts?.onRequestedRunFinalized?.();
       }
       if (!emittedRequests.has(outcome)) {
         await emitMissingRequestedCronRunTerminal(state, outcome, missingJob);
