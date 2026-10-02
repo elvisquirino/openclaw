@@ -103,6 +103,19 @@ function waitResult(entry: QuestionEntry, includeResolutionId: boolean): Questio
   };
 }
 
+function canonicalizeQuestionAnswer(question: Question, value: string): string {
+  if (question.options.some((option) => option.value !== undefined && option.value === value)) {
+    return value;
+  }
+  const preserveBytes = question.isSecret || question.presentation === "form";
+  const candidate = preserveBytes ? value : value.trim();
+  const matches = question.options.filter(
+    (option) => (preserveBytes ? option.label : option.label.trim()) === candidate,
+  );
+  const matched = matches.length === 1 ? matches[0] : undefined;
+  return matched ? (matched.value ?? matched.label) : candidate;
+}
+
 /** Process-local lifecycle owner for pending questions. */
 export class QuestionManager {
   private readonly entries = new Map<string, QuestionEntry>();
@@ -447,16 +460,9 @@ export class QuestionManager {
       if (!question.multiSelect && values.length > 1) {
         throw this.invalidAnswer(question.questionId, "does not allow multiple answers");
       }
-      // Store the declared option label when a value matches trim-insensitively;
-      // downstream renderers compare answers to option labels exactly.
-      const canonicalValues = values.map((value) => {
-        // Masked free-text answers preserve exact bytes, including whitespace.
-        if (question.isSecret || question.presentation === "form") {
-          return value;
-        }
-        const matched = question.options.find((option) => option.label.trim() === value.trim());
-        return matched ? matched.label : value.trim();
-      });
+      // Store the option's canonical value (value ?? label) so installed clients
+      // sending labels and clients sending values converge on the same answer.
+      const canonicalValues = values.map((value) => canonicalizeQuestionAnswer(question, value));
       if (
         question.options.length > 0 &&
         !question.isOther &&
