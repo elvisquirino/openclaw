@@ -345,7 +345,7 @@ export async function incrementCompactionCount(params: {
                 }
               },
             }
-          : {}),
+          : { workerGuard: {} }),
       },
     );
   } catch (error) {
