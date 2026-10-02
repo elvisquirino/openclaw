@@ -7,6 +7,7 @@ import {
   type McpAppHostFile,
   type McpAppViewLease,
 } from "../agents/mcp-ui-resource.js";
+import { hasErrnoCode } from "../infra/errno.js";
 import { requireMcpAppInteraction, resolveMcpAppRequesterId } from "./mcp-app-operations.js";
 import { retainSessionScopedRead } from "./server-methods/session-scoped-read.js";
 import { resolveLocalSessionWorkspaceRoot } from "./server-methods/sessions-files.js";
@@ -338,7 +339,7 @@ export async function subscribeMcpAppHostFile(
       try {
         watcher = arm();
       } catch (error) {
-        if (retry && (error as NodeJS.ErrnoException).code === "ENOENT") {
+        if (retry && hasErrnoCode(error, "ENOENT")) {
           setImmediate(() => rearm(false));
         } else {
           close();
