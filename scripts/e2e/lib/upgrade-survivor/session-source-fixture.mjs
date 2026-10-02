@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-function captureLegacySessionSources(stateDir) {
-  const directory = path.join(stateDir, "sessions");
+function captureLegacySessionSources(directory, names) {
+  const sourceNames =
+    names ??
+    fs.readdirSync(directory).filter((name) => name === "sessions.json" || name.endsWith(".jsonl"));
   const sources = Object.fromEntries(
-    fs.readdirSync(directory).map((name) => [
+    sourceNames.map((name) => [
       name,
       createHash("sha256")
         .update(fs.readFileSync(path.join(directory, name)))
@@ -34,12 +36,22 @@ export function recordLegacySessionSources(stateDir) {
     return;
   }
   const fixture = JSON.parse(fs.readFileSync(fixturePath(), "utf8"));
-  fixture.legacySessionSources = captureLegacySessionSources(stateDir);
+  fixture.legacySessionSources = captureLegacySessionSources(
+    path.join(stateDir, "agents", "main", "sessions"),
+  );
   fs.writeFileSync(fixturePath(), `${JSON.stringify(fixture, null, 2)}\n`);
 }
 
-export function assertLegacySessionSourceDisposition(legacyStorePath, source) {
+export function assertLegacySessionSourceDisposition(legacyStorePath, source, candidateVersion) {
   if (!usesMissingPathFixture()) {
+    if (source === "file") {
+      // The July 1 regular releases still owned file-backed sessions.
+      assert(
+        /^2026\.7\.1(?:-(?:[12]|beta\.[1-6]))?$/.test(candidateVersion ?? ""),
+        "SQLite session import missing for candidate",
+      );
+      return;
+    }
     assert(
       !fs.existsSync(legacyStorePath),
       `legacy sessions.json survived migration: ${legacyStorePath}`,
@@ -50,7 +62,10 @@ export function assertLegacySessionSourceDisposition(legacyStorePath, source) {
   assert.notEqual(source, "file", "Retained legacy sources must have canonical SQLite sessions");
   // Pending plugin migrations retain their sources after canonical SQLite import.
   assert.deepEqual(
-    captureLegacySessionSources(path.dirname(path.dirname(legacyStorePath))),
+    captureLegacySessionSources(
+      path.dirname(legacyStorePath),
+      Object.keys(fixture.legacySessionSources),
+    ),
     fixture.legacySessionSources,
     "Uninspected legacy session source bytes changed",
   );

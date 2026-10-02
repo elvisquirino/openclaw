@@ -15,7 +15,9 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import { recordLegacySessionSources } from "../../scripts/e2e/lib/upgrade-survivor/session-source-fixture.mjs";
 import { UPGRADE_SURVIVOR_ASSERTION_SCENARIOS } from "../../scripts/lib/upgrade-survivor-policy.mjs";
+import { assertSupportedSessionStoreEntry } from "../../src/config/sessions/supported-session-store.js";
 import type { PluginInstallRecord } from "../../src/config/types.plugins.js";
 import type { PluginUpdateOutcome } from "../../src/plugins/update.js";
 import { withEnv } from "../../src/test-utils/env.js";
@@ -959,7 +961,7 @@ function writeSharedRuntimeCaches(stateDir: string, versioned = false): void {
 
 function runSessionStateAssertion(
   setup: (stateDir: string) => NodeJS.ProcessEnv | undefined,
-  options: { scenario?: string; commands?: string[] } = {},
+  options: { scenario?: string; commands?: string[]; candidateVersion?: string } = {},
 ): void {
   const root = mkdtempSync(join(tmpdir(), "openclaw-upgrade-survivor-session-state-"));
   try {
@@ -974,7 +976,7 @@ function runSessionStateAssertion(
     writeSharedRuntimeCaches(stateDir, options.scenario === "versioned-runtime-deps");
     const fixtureEnv = setup(stateDir);
     for (const command of options.commands ?? ["assert-state"]) {
-      execFileSync(testNodeExecPath, [ASSERTIONS_PATH, command], {
+      execFileSync(testNodeExecPath, [ASSERTIONS_PATH, command, options.candidateVersion ?? ""], {
         env: {
           ...process.env,
           ...fixtureEnv,
@@ -1025,6 +1027,13 @@ printf '%s' "\${OPENCLAW_UPGRADE_SURVIVOR_MISSING_LOAD_PATH_SEEDED:-}"
     ],
     { env, encoding: "utf8" },
   ).trim();
+  return env;
+}
+
+function writeRetainedSessionFiles(stateDir: string, options: { includePrompt?: boolean } = {}) {
+  const env = seedSessionSourceFixture(stateDir, "base", true);
+  writeMigratedSessionFiles(stateDir, options);
+  withEnv(env, () => recordLegacySessionSources(stateDir));
   return env;
 }
 
@@ -1908,23 +1917,17 @@ process.stdout.write(sessionDir + "\\n");
         });
         const afterSeed = Date.now();
 
-        const sessionsDir = join(
-          stateDir,
-          scenario === "sqlite-volume" ? "agents/main/sessions" : "sessions",
-        );
-        const otherStore = join(
-          stateDir,
-          scenario === "sqlite-volume" ? "sessions" : "agents/main/sessions",
-          "sessions.json",
-        );
+        const sessionsDir = join(stateDir, "agents", "main", "sessions");
+        const otherStore = join(stateDir, "sessions", "sessions.json");
         expect(() => readFileSync(otherStore)).toThrow(/ENOENT/);
         const sessions = JSON.parse(
           readFileSync(join(sessionsDir, "sessions.json"), "utf8"),
         ) as Record<string, { sessionId?: unknown; sessionFile?: unknown; updatedAt?: unknown }>;
-        const keys =
-          scenario === "sqlite-volume"
-            ? ["agent:main:main", "agent:main:+15551234567", "agent:main:slack:channel:cupgrade"]
-            : ["main", "+15551234567", "slack:channel:CUPGRADE"];
+        const keys = [
+          "agent:main:main",
+          "agent:main:+15551234567",
+          "agent:main:slack:channel:cupgrade",
+        ];
         expect(Object.keys(sessions)).toEqual(keys);
         const seededRows = keys.map((key) => sessions[key]);
         expect(seededRows.map((row) => row?.sessionId)).toEqual([
@@ -1935,6 +1938,7 @@ process.stdout.write(sessionDir + "\\n");
 
         for (const row of seededRows) {
           assert(row);
+          expect(() => assertSupportedSessionStoreEntry(row)).not.toThrow();
           const transcriptPath = join(sessionsDir, `${String(row.sessionId)}.jsonl`);
           expect(row.sessionFile).toBe(transcriptPath);
           expect(JSON.parse(readFileSync(transcriptPath, "utf8")).id).toBe(row.sessionId);
@@ -2067,8 +2071,10 @@ process.stdout.write(sessionDir + "\\n");
         },
         stdio: "pipe",
       });
-      const seeded = JSON.parse(readFileSync(join(stateDir, "sessions", "sessions.json"), "utf8"));
-      const acp = seeded["slack:channel:CUPGRADE"].acp;
+      const seeded = JSON.parse(
+        readFileSync(join(stateDir, "agents", "main", "sessions", "sessions.json"), "utf8"),
+      );
+      const acp = seeded["agent:main:slack:channel:cupgrade"].acp;
       expect(acp).toMatchObject({
         backend: "acpx",
         identity: {
@@ -2459,7 +2465,7 @@ process.stdout.write(sessionDir + "\\n");
           const env = seedSessionSourceFixture(stateDir);
           writeMigratedSessionState(stateDir);
           if (!retained) {
-            rmSync(join(stateDir, "sessions"), { recursive: true });
+            rmSync(join(stateDir, "agents", "main", "sessions", "sessions.json"));
           }
           return env;
         });
@@ -2508,7 +2514,7 @@ process.stdout.write(sessionDir + "\\n");
               );
             } else if (corruption === "source") {
               writeFileSync(
-                join(stateDir, "sessions", "upgrade-main-session.jsonl"),
+                join(stateDir, "agents", "main", "sessions", "upgrade-main-session.jsonl"),
                 "changed source",
               );
             } else if (corruption === "sqlite-row") {
@@ -2536,9 +2542,10 @@ process.stdout.write(sessionDir + "\\n");
   it("prefers session_nodes over stale file and cache session stores", () => {
     expect(() =>
       runSessionStateAssertion((stateDir) => {
+        const env = writeRetainedSessionFiles(stateDir, { includePrompt: false });
         writeMigratedSessionState(stateDir);
-        writeMigratedSessionFiles(stateDir, { includePrompt: false });
         writeLegacyCacheSessionState(stateDir, { includePrompt: false });
+        return env;
       }),
     ).not.toThrow();
   });
@@ -2581,7 +2588,6 @@ process.stdout.write(sessionDir + "\\n");
         } finally {
           db.close();
         }
-        writeMigratedSessionFiles(stateDir);
       });
     if (error) {
       expect(verify).toThrow(error);
@@ -2593,6 +2599,7 @@ process.stdout.write(sessionDir + "\\n");
   it("does not mask missing session_nodes rows with a valid file store", () => {
     expect(() =>
       runSessionStateAssertion((stateDir) => {
+        const env = writeRetainedSessionFiles(stateDir);
         writeMigratedSessionState(stateDir);
         const db = new DatabaseSync(
           join(stateDir, "agents", "main", "agent", "openclaw-agent.sqlite"),
@@ -2602,7 +2609,7 @@ process.stdout.write(sessionDir + "\\n");
         } finally {
           db.close();
         }
-        writeMigratedSessionFiles(stateDir);
+        return env;
       }),
     ).toThrow(/main legacy session row missing/);
   });
@@ -2610,9 +2617,10 @@ process.stdout.write(sessionDir + "\\n");
   it("does not mask empty legacy cache_entries with a valid file store", () => {
     expect(() =>
       runSessionStateAssertion((stateDir) => {
+        const env = writeRetainedSessionFiles(stateDir);
         writeMigratedSessionState(stateDir);
         writeLegacyCacheSessionState(stateDir, { empty: true, replaceNodes: true });
-        writeMigratedSessionFiles(stateDir);
+        return env;
       }),
     ).toThrow(/main legacy session row missing/);
   });
@@ -2620,9 +2628,10 @@ process.stdout.write(sessionDir + "\\n");
   it("prefers legacy cache_entries over a stale file session store", () => {
     expect(() =>
       runSessionStateAssertion((stateDir) => {
+        const env = writeRetainedSessionFiles(stateDir, { includePrompt: false });
         writeMigratedSessionState(stateDir);
         writeLegacyCacheSessionState(stateDir, { replaceNodes: true });
-        writeMigratedSessionFiles(stateDir, { includePrompt: false });
+        return env;
       }),
     ).not.toThrow();
   });
@@ -2630,29 +2639,40 @@ process.stdout.write(sessionDir + "\\n");
   it("prefers legacy session_entries over stale file and cache session stores", () => {
     expect(() =>
       runSessionStateAssertion((stateDir) => {
+        const env = writeRetainedSessionFiles(stateDir, { includePrompt: false });
         writeMigratedSessionState(stateDir);
         writeLegacySessionEntriesState(stateDir);
         writeLegacyCacheSessionState(stateDir, { includePrompt: false });
-        writeMigratedSessionFiles(stateDir, { includePrompt: false });
+        return env;
       }),
     ).not.toThrow();
   });
 
-  it("uses the file session store when SQLite has no supported session table", () => {
-    expect(() =>
-      runSessionStateAssertion((stateDir) => {
-        const agentDbDir = join(stateDir, "agents", "main", "agent");
-        mkdirSync(agentDbDir, { recursive: true });
-        const db = new DatabaseSync(join(agentDbDir, "openclaw-agent.sqlite"));
-        try {
-          db.exec("CREATE TABLE unrelated_state (key TEXT PRIMARY KEY);");
-        } finally {
-          db.close();
-        }
-        writeMigratedSessionFiles(stateDir);
-      }),
-    ).not.toThrow();
-  });
+  it.each(["2026.7.1-2", "2026.9.7", undefined])(
+    "allows a file session store without SQLite tables only for a file-backed candidate (%s)",
+    (candidateVersion) => {
+      const verify = () =>
+        runSessionStateAssertion(
+          (stateDir) => {
+            const agentDbDir = join(stateDir, "agents", "main", "agent");
+            mkdirSync(agentDbDir, { recursive: true });
+            const db = new DatabaseSync(join(agentDbDir, "openclaw-agent.sqlite"));
+            try {
+              db.exec("CREATE TABLE unrelated_state (key TEXT PRIMARY KEY);");
+            } finally {
+              db.close();
+            }
+            writeMigratedSessionFiles(stateDir);
+          },
+          { candidateVersion },
+        );
+      if (candidateVersion === "2026.7.1-2") {
+        expect(verify).not.toThrow();
+      } else {
+        expect(verify).toThrow(/SQLite session import missing for candidate/);
+      }
+    },
+  );
 
   it.each([
     "ok",
@@ -2809,7 +2829,13 @@ process.stdout.write(JSON.stringify(result));
         try {
           db.prepare("UPDATE session_nodes SET entry_json = ? WHERE session_key = ?").run(
             JSON.stringify({
-              sessionFile: join(stateDir, "sessions", "upgrade-main-session.jsonl"),
+              sessionFile: join(
+                stateDir,
+                "agents",
+                "main",
+                "sessions",
+                "upgrade-main-session.jsonl",
+              ),
             }),
             "agent:main:main",
           );

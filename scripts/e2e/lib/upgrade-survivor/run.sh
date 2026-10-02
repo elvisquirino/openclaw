@@ -1986,7 +1986,7 @@ assert_volume_idempotence() {
     node scripts/lib/check-limits.mts scripts/e2e/lib/upgrade-survivor/run.sh "Upgrade idempotence budget" "SQLite volume idempotence exceeded budget: ${idempotence_seconds}s > ${budget}s" || return "$?"
   fi
   OPENCLAW_UPGRADE_SURVIVOR_ASSERT_STAGE="$survival_assert_stage" \
-    node scripts/e2e/lib/upgrade-survivor/assertions.mjs assert-state
+    node scripts/e2e/lib/upgrade-survivor/assertions.mjs assert-state "$candidate_version"
 }
 
 validate_post_doctor_config() {
@@ -2001,7 +2001,7 @@ assert_survival() {
   node scripts/e2e/lib/upgrade-survivor/assertions.mjs assert-exec-approvals || return "$?"
   node scripts/e2e/lib/upgrade-survivor/assertions.mjs assert-config || return "$?"
   OPENCLAW_UPGRADE_SURVIVOR_ASSERT_STAGE="$survival_assert_stage" \
-    node scripts/e2e/lib/upgrade-survivor/assertions.mjs assert-state || return "$?"
+    node scripts/e2e/lib/upgrade-survivor/assertions.mjs assert-state "$candidate_version" || return "$?"
   installed_version="$(read_installed_version)" || return "$?"
   if [ "$baseline_version" = "2026.9.2" ] && [ "$candidate_version" = "2026.9.3" ]; then
     local expected_state_schema
