@@ -13,8 +13,8 @@ import { createSessionRowProjection } from "./session-row-projection.js";
 import { listProjectedSessions } from "./session-utils-list.js";
 import { createWorkerSessionPlacementStore } from "./worker-environments/placement-store.js";
 
-// Periodic WAL maintenance is independent of the request SQL budget.
 const fixtureLifetime = createFixtureLifetime();
+// Hold GatewayScheduler timeouts so WAL maintenance stays outside the request SQL budget.
 beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
 afterEach(async () => {
   try {
