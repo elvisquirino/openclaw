@@ -1,14 +1,19 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { deserialize, serialize } from "node:v8";
+import { MessageChannel } from "node:worker_threads";
 import { afterEach, expect, it, vi } from "vitest";
 import { awaitGateBeforeSettlement, withinTest } from "../../../test/helpers/promise.js";
 import { observeHostDataSql } from "../../../test/helpers/sqlite-statement-execution-counter.js";
+import { requireNodeSqlite } from "../../infra/node-sqlite.js";
 import * as admission from "../../infra/sqlite-worker-operation-admission.js";
 import { patchSessionEntry } from "../../plugin-sdk/session-store-runtime.js";
 import { onSessionIdentityMutation } from "../../sessions/session-lifecycle-events.js";
 import { sessionChanges } from "../../sessions/session-row-changes.js";
 import { createDeferredCore } from "../../shared/deferred.js";
-import { openOpenClawAgentDatabase } from "../../state/openclaw-agent-db.js";
+import {
+  openOpenClawAgentDatabase,
+  runOpenClawAgentWriteTransaction,
+} from "../../state/openclaw-agent-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import {
   readExactSessionEntryRow,
@@ -19,6 +24,9 @@ import {
   patchSessionEntryCore as patchInternalSessionEntry,
   replaceSessionEntrySync,
 } from "./session-accessor.sqlite-entry.js";
+import { appendTranscriptEventsInTransaction } from "./session-accessor.sqlite-transcript-store.js";
+import { readSessionTranscriptWatermarkInDatabase } from "./session-accessor.sqlite-transcript-watermark.js";
+import { commitSessionEntryPatch } from "./session-entry-patch.worker.js";
 import { readSessionEntryInWorker } from "./session-entry-read-runtime.js";
 
 vi.mock("./session-accessor.sqlite-maintenance-kick.js", () => ({
@@ -85,6 +93,77 @@ function patchSessionEntryCore(
 ) {
   return patchInternalSessionEntry(scope, update, { workerGuard: {}, ...options });
 }
+
+it("evaluates the active-leaf predicate on the patch transaction's uncommitted transcript", async () => {
+  await withOpenClawTestState({ scenario: "minimal" }, async () => {
+    const f = fixture();
+    const options = { agentId: f.database.agentId, path: f.database.path };
+    const scope = { ...f.scope, sessionId: "original" };
+    const event = (id: string, parentId: string | null) => ({
+      type: "message",
+      id,
+      parentId,
+      message: { role: "user", content: id },
+    });
+    runOpenClawAgentWriteTransaction(
+      (database) => appendTranscriptEventsInTransaction(database, scope, [event("root", null)]),
+      options,
+    );
+    const prepared = readSessionEntrySelectionSnapshot(f.database, f.scope.sessionKey, false);
+    const writeBase = prepared[0]!.entry;
+    const { generation } = readSessionTranscriptWatermarkInDatabase(f.database, scope.sessionId);
+    expect(generation).not.toBeNull();
+    const observer = new (requireNodeSqlite().DatabaseSync)(f.database.path, { readOnly: true });
+    const { port1, port2 } = new MessageChannel();
+    try {
+      admission.withSqliteWorkerOperationAdmission({ port: port1 }, () =>
+        commitSessionEntryPatch(
+          {
+            selection: { kind: "entry", sessionKey: f.scope.sessionKey, exact: false },
+            prepared,
+            sessionKey: f.scope.sessionKey,
+            writeBase,
+            next: { ...writeBase, label: "transaction leaf accepted" },
+            operationLabel: "session-entry.patch",
+            validateCanonicalKeys: false,
+            shouldCommitIf: {
+              kind: "transcript",
+              sessionId: scope.sessionId,
+              generation,
+              leafEntryId: "pending",
+            },
+          },
+          {
+            options,
+            open: () => f.database,
+            admit() {},
+            writeTransaction: (operationLabel, _owner, write) =>
+              runOpenClawAgentWriteTransaction(
+                (database) => {
+                  appendTranscriptEventsInTransaction(database, scope, [event("pending", "root")]);
+                  expect(
+                    observer
+                      .prepare(
+                        "SELECT leaf_event_id FROM session_transcript_index_state WHERE session_id = ?",
+                      )
+                      .get(scope.sessionId),
+                  ).toMatchObject({ leaf_event_id: "root" });
+                  return write(database);
+                },
+                options,
+                { operationLabel },
+              ),
+          },
+        ),
+      );
+      expect(f.read()?.label).toBe("transaction leaf accepted");
+    } finally {
+      observer.close();
+      port1.close();
+      port2.close();
+    }
+  });
+});
 
 it("compares transported snapshot columns without rehydrating unchanged entries", async () => {
   await withOpenClawTestState({ scenario: "minimal" }, async () => {
