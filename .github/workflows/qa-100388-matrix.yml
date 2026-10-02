@@ -1,0 +1,62 @@
+name: QA 100388 Matrix isolated
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-100388-matrix-isolated
+  cancel-in-progress: false
+
+jobs:
+  matrix-live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NODE_VERSION: 24.x
+      OPENCLAW_BUILD_PRIVATE_QA: "1"
+      OPENCLAW_ENABLE_PRIVATE_QA_CLI: "1"
+      OPENCLAW_QA_REDACT_PUBLIC_METADATA: "1"
+    steps:
+      - name: Checkout isolated proof branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: qa-100388-matrix-live
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          cache-mode: restore
+          node-version: 24.x
+          install-bun: "true"
+
+      - name: Build private QA runtime
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm build
+
+      - name: Run disposable Matrix smoke
+        run: |
+          set -euo pipefail
+          output_dir=".artifacts/qa-e2e/100388-matrix-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "${output_dir}"
+          pnpm openclaw qa matrix \
+            --repo-root . \
+            --output-dir "${output_dir}" \
+            --provider-mode mock-openai \
+            --scenario matrix-dm-thread-reply-override \
+            --fast \
+            --fail-fast
+
+      - name: Upload redacted evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: qa-100388-matrix-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/qa-e2e/100388-matrix-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
