@@ -40,8 +40,6 @@ import * as sessionSharing from "../session-sharing-preparation.js";
 import { withRequesterTestAuthority } from "./sessions-initial-transfer.test-support.js";
 import { sessionSharingTestContext } from "./sessions-sharing.test-support.js";
 
-const { useSubagentControlFixture } =
-  await import("../../agents/subagents/registry/subagent-control.test-support.js");
 const fixture = useSubagentControlFixture();
 const requesterSessionKey = "agent:main:main";
 afterEach(() => {
