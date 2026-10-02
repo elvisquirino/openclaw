@@ -1,6 +1,6 @@
 const nodeCommand = (source: string) => `node -e ${JSON.stringify(source)}`;
 
-export const QA_NATIVE_WORKSPACE_BEHAVIOR_IDS = [
+const QA_NATIVE_WORKSPACE_BEHAVIOR_IDS = [
   "bash",
   "edit",
   "exec",
@@ -19,6 +19,7 @@ export type QaNativeWorkspaceBehavior = {
   failureArgs: Record<string, unknown>;
   happyOutputMarker?: string;
   failureOutputMarker?: string;
+  commandReceiptSignatures?: { happy: readonly string[]; failure: readonly string[] };
   seedFiles?: ReadonlyArray<{ path: string; contents: string }>;
   happyMutation?: { path: string; contents: string };
   failureSentinel?: { path: string; contents: string };
@@ -40,6 +41,15 @@ const BEHAVIORS: Record<QaNativeWorkspaceBehaviorId, QaNativeWorkspaceBehavior> 
     },
     happyOutputMarker: "RUNTIME_NATIVE_BASH_OK",
     failureOutputMarker: "RUNTIME_NATIVE_BASH_FAIL",
+    commandReceiptSignatures: {
+      happy: ["node -e", "process.stdout.write", "RUNTIME_NATIVE_BASH_OK"],
+      failure: [
+        "node -e",
+        "process.stderr.write",
+        "RUNTIME_NATIVE_BASH_FAIL",
+        "process.exitCode = 7",
+      ],
+    },
   },
   edit: {
     id: "edit",
@@ -83,6 +93,15 @@ const BEHAVIORS: Record<QaNativeWorkspaceBehaviorId, QaNativeWorkspaceBehavior> 
     },
     happyOutputMarker: "RUNTIME_NATIVE_EXEC_OK",
     failureOutputMarker: "RUNTIME_NATIVE_EXEC_FAIL",
+    commandReceiptSignatures: {
+      happy: ["node -e", "process.stdout.write", "RUNTIME_NATIVE_EXEC_OK"],
+      failure: [
+        "node -e",
+        "process.stderr.write",
+        "RUNTIME_NATIVE_EXEC_FAIL",
+        "process.exitCode = 8",
+      ],
+    },
   },
   "fs-read": {
     id: "fs-read",
@@ -99,6 +118,10 @@ const BEHAVIORS: Record<QaNativeWorkspaceBehaviorId, QaNativeWorkspaceBehavior> 
       ),
     },
     happyOutputMarker: "RUNTIME_NATIVE_READ_OK",
+    commandReceiptSignatures: {
+      happy: ["readFileSync", "runtime-tool-fixture-read.txt"],
+      failure: ["readFileSync", "runtime-tool-fixture-read-missing.txt"],
+    },
     seedFiles: [{ path: "runtime-tool-fixture-read.txt", contents: "RUNTIME_NATIVE_READ_OK\n" }],
   },
   "fs-write": {
@@ -119,6 +142,10 @@ const BEHAVIORS: Record<QaNativeWorkspaceBehaviorId, QaNativeWorkspaceBehavior> 
       path: "runtime-tool-fixture-native-write.txt",
       contents: "runtime native write\n",
     },
+    commandReceiptSignatures: {
+      happy: ["writeFileSync", "runtime-tool-fixture-native-write.txt", "runtime native write"],
+      failure: ["writeFileSync", "runtime-tool-fixture-missing-dir/write.txt", "must not exist"],
+    },
   },
   grep: {
     id: "grep",
@@ -135,6 +162,21 @@ const BEHAVIORS: Record<QaNativeWorkspaceBehaviorId, QaNativeWorkspaceBehavior> 
       ),
     },
     happyOutputMarker: "RUNTIME_NATIVE_GREP_MATCH",
+    commandReceiptSignatures: {
+      happy: [
+        "readFileSync",
+        "runtime-tool-fixture-grep.txt",
+        ".find",
+        "RUNTIME_NATIVE_GREP_MATCH",
+      ],
+      failure: [
+        "readFileSync",
+        "runtime-tool-fixture-grep.txt",
+        ".includes",
+        "RUNTIME_NATIVE_GREP_MISSING",
+        "process.exit(1)",
+      ],
+    },
     seedFiles: [
       {
         path: "runtime-tool-fixture-grep.txt",

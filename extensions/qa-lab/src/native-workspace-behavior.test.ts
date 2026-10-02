@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  getQaNativeWorkspaceBehavior,
-  QA_NATIVE_WORKSPACE_BEHAVIOR_IDS,
-} from "./native-workspace-behavior.js";
+import { getQaNativeWorkspaceBehavior } from "./native-workspace-behavior.js";
 import { buildQaToolSearchArgs } from "./providers/mock-openai/mock-openai-tooling.js";
 
 describe("Codex-native workspace mock planning", () => {
-  it.each(QA_NATIVE_WORKSPACE_BEHAVIOR_IDS)(
+  it.each(["bash", "edit", "exec", "fs-read", "fs-write", "grep"] as const)(
     "routes %s through the declared native provider tool",
     (behaviorId) => {
       const behavior = getQaNativeWorkspaceBehavior(behaviorId);

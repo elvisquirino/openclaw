@@ -9,10 +9,7 @@ import {
   transcriptToolResult,
   writeQaSessionTranscript,
 } from "../test/runtime-tool-fixture-helpers.js";
-import {
-  getQaNativeWorkspaceBehavior,
-  QA_NATIVE_WORKSPACE_BEHAVIOR_IDS,
-} from "./native-workspace-behavior.js";
+import { getQaNativeWorkspaceBehavior } from "./native-workspace-behavior.js";
 import { runRuntimeToolFixture } from "./runtime-tool-fixture.js";
 
 const OPENCLAW_TOOL_BY_BEHAVIOR = {
@@ -30,7 +27,7 @@ afterEach(() => {
 afterAll(cleanupRuntimeToolFixtureTempRoots);
 
 describe("Codex-native workspace runtime tool fixtures", () => {
-  it.each(QA_NATIVE_WORKSPACE_BEHAVIOR_IDS)(
+  it.each(["bash", "edit", "exec", "fs-read", "fs-write", "grep"] as const)(
     "requires correlated native receipts and observable %s outcomes",
     async (behaviorId) => {
       const env = await makeEnv();
@@ -38,7 +35,7 @@ describe("Codex-native workspace runtime tool fixtures", () => {
       const behavior = getQaNativeWorkspaceBehavior(behaviorId);
       const happyArguments =
         behavior.nativeToolName === "bash"
-          ? { command: behavior.happyArgs.cmd }
+          ? { command: `/bin/zsh -lc ${JSON.stringify(behavior.happyArgs.cmd)}` }
           : {
               changes: [
                 {
@@ -49,7 +46,7 @@ describe("Codex-native workspace runtime tool fixtures", () => {
             };
       const failureArguments =
         behavior.nativeToolName === "bash"
-          ? { command: behavior.failureArgs.cmd }
+          ? { command: `/bin/zsh -lc ${JSON.stringify(behavior.failureArgs.cmd)}` }
           : {
               changes: [
                 {
@@ -59,6 +56,13 @@ describe("Codex-native workspace runtime tool fixtures", () => {
               ],
             };
       const runtimeToolName = OPENCLAW_TOOL_BY_BEHAVIOR[behaviorId];
+      if (behaviorId === "fs-write" && behavior.happyMutation) {
+        await fs.writeFile(
+          path.join(env.gateway.workspaceDir, behavior.happyMutation.path),
+          behavior.happyMutation.contents,
+          "utf8",
+        );
+      }
       await writeQaSessionTranscript(env, `agent:qa:runtime-tool:${runtimeToolName}:happy`, [
         transcriptToolCall(behavior.nativeToolName, "happy", happyArguments),
         transcriptToolResult(
@@ -101,11 +105,11 @@ describe("Codex-native workspace runtime tool fixtures", () => {
               requireSuccessfulTranscriptToolResult: params.requireSuccessfulTranscriptToolResult,
             });
             if (params.sessionKey.endsWith(":happy") && behavior.happyMutation) {
-              await fs.writeFile(
-                path.join(env.gateway.workspaceDir, behavior.happyMutation.path),
-                behavior.happyMutation.contents,
-                "utf8",
-              );
+              const mutationPath = path.join(env.gateway.workspaceDir, behavior.happyMutation.path);
+              if (behaviorId === "fs-write") {
+                await expect(fs.readFile(mutationPath, "utf8")).rejects.toThrow();
+              }
+              await fs.writeFile(mutationPath, behavior.happyMutation.contents, "utf8");
             }
             return {};
           }),
