@@ -945,7 +945,7 @@ export async function maybeMigrateAuthProfileJsonStoresToSqlite(params: {
           awsSdkMarkers.map((profile) => profile.profileId),
         );
       }
-      normalizeLegacyAuthProfileFields(rawStore);
+      const canonicalizedSecretRefs = normalizeLegacyAuthProfileFields(rawStore);
       const maybeCanonicalStore =
         coerceLegacyAuthProfileStore(rawStore) ??
         coerceLegacyFlatAuthProfileStore(rawStore) ??
@@ -1207,6 +1207,11 @@ export async function maybeMigrateAuthProfileJsonStoresToSqlite(params: {
       result.changes.push(
         `Migrated auth profile JSON for ${shortenHomePath(candidate.authPath)} into SQLite (${archiveText}).`,
       );
+      if (canonicalizedSecretRefs > 0) {
+        result.changes.push(
+          `Canonicalized ${canonicalizedSecretRefs} auth SecretRef(s) to source/provider/id; unsupported fields are preserved in the verified source archives (${archiveText}).`,
+        );
+      }
       completed = true;
       if (unresolvedSidecarWarning) {
         result.warnings.push(unresolvedSidecarWarning);
@@ -1604,8 +1609,8 @@ export async function maybeRepairLegacyAuthProfileStores(params: {
     if (target.canRenameAliases) {
       canonicalizeLegacyAuthStore(migratedStore, migratedState, migrationMap);
     }
-    normalizeLegacyAuthProfileFields(migratedStore);
-    return Object.assign(target, { migratedStore, migratedState });
+    const canonicalizedSecretRefs = normalizeLegacyAuthProfileFields(migratedStore);
+    return Object.assign(target, { migratedStore, migratedState, canonicalizedSecretRefs });
   });
   const changed = migrated.filter(
     (target) =>
@@ -1750,6 +1755,11 @@ export async function maybeRepairLegacyAuthProfileStores(params: {
       const stateChanged = !isDeepStrictEqual(state, target.state);
       if (storeChanged) {
         writePersistedAuthProfileStoreRaw(store, target.agentDir, database);
+        if (target.canonicalizedSecretRefs > 0) {
+          changes.push(
+            `Canonicalized ${target.canonicalizedSecretRefs} auth SecretRef(s) in ${shortenHomePath(target.databasePath)} to source/provider/id; unsupported fields are preserved in the verified migration backup.`,
+          );
+        }
       }
       if (stateChanged) {
         writePersistedAuthProfileStateRaw(state, target.agentDir, database);
