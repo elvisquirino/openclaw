@@ -98,15 +98,31 @@ async function legacyAgentFixture(postCore: boolean) {
 
 const runtime = () => ({ log: vi.fn(), error: vi.fn(), exit: vi.fn() });
 
-it("admits only private rehearsal while the shipped package validator can roll back", async () => {
-  await withOpenClawTestState({ scenario: "minimal" }, async () => {
-    const f = await legacyAgentFixture(false);
-    expect(await guardUpdateDoctorSchemaUpgrade({ schemas: f.schemas })).toMatchObject({
-      updateSchemaRehearsal: { runId: f.runId, updaterVersion: "2026.9.2" },
+it.each(["explicit", "implicit legacy"])(
+  "admits only private rehearsal while the shipped package validator can roll back (%s)",
+  async (selection) => {
+    await withOpenClawTestState({ layout: "home", scenario: "minimal" }, async (state) => {
+      if (selection === "implicit legacy") {
+        const legacy = path.join(state.home, ".clawdbot");
+        fs.renameSync(state.stateDir, legacy);
+        vi.stubEnv("OPENCLAW_STATE_DIR", legacy);
+        vi.stubEnv("OPENCLAW_CONFIG_PATH", path.join(legacy, "openclaw.json"));
+      }
+      const f = await legacyAgentFixture(false);
+      if (selection === "implicit legacy") {
+        vi.stubEnv("OPENCLAW_STATE_DIR", undefined);
+        vi.stubEnv("OPENCLAW_CONFIG_PATH", undefined);
+      }
+      expect(await guardUpdateDoctorSchemaUpgrade({ schemas: f.schemas })).toMatchObject({
+        updateSchemaRehearsal: { runId: f.runId, updaterVersion: "2026.9.2" },
+      });
+      expect(fs.readFileSync(f.pathname)).toEqual(f.bytes);
+      if (selection === "implicit legacy") {
+        expect(fs.existsSync(state.stateDir)).toBe(false);
+      }
     });
-    expect(fs.readFileSync(f.pathname)).toEqual(f.bytes);
-  });
-});
+  },
+);
 
 it.each(["missing writable marker", "forged post-core marker"])(
   "refuses %s without changing the agent database",

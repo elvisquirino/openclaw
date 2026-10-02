@@ -1,23 +1,46 @@
 // State-directory lookup without initializing process-wide config paths.
-import fs from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import os from "node:os";
 import path from "node:path";
+import { isPromiseLike } from "@openclaw/normalization-core/promise-like";
 import { resolveHomeRelativePath, resolveRequiredHomeDir } from "../infra/home-dir.js";
-import { isFastTestRuntimeEnv } from "../infra/test-runtime-env.js";
-
-const LEGACY_STATE_DIRNAMES = [".clawdbot"] as const;
 const NEW_STATE_DIRNAME = ".openclaw";
+const migrationSelection = new AsyncLocalStorage<{
+  home: string;
+  stateDir: string;
+  active: boolean;
+}>();
 
 function resolveDefaultHomeDir(): string {
   return resolveRequiredHomeDir(process.env, os.homedir);
 }
 
-export function resolveLegacyStateDirs(homedir: () => string = resolveDefaultHomeDir): string[] {
-  return LEGACY_STATE_DIRNAMES.map((dir) => path.join(homedir(), dir));
-}
-
 export function resolveNewStateDir(homedir: () => string = resolveDefaultHomeDir): string {
   return path.join(homedir(), NEW_STATE_DIRNAME);
+}
+
+/** Doctor carries its prepared source root through reads, relocation, and rollback. */
+export function withMigrationStateDir<T>(
+  env: NodeJS.ProcessEnv,
+  stateDir: string,
+  run: () => T,
+): T {
+  const selected = { home: resolveRequiredHomeDir(env, os.homedir), stateDir, active: true };
+  const revoke = () => {
+    selected.active = false;
+  };
+  try {
+    const value = migrationSelection.run(selected, run);
+    if (isPromiseLike(value)) {
+      void Promise.resolve(value).then(revoke, revoke);
+    } else {
+      revoke();
+    }
+    return value;
+  } catch (error) {
+    revoke();
+    throw error;
+  }
 }
 
 /**
@@ -39,27 +62,15 @@ export function resolveStateDir(
 
 /** Select a default state directory from the caller's already resolved home. */
 export function resolveStateDirFromHome(
-  env: NodeJS.ProcessEnv,
+  _env: NodeJS.ProcessEnv,
   effectiveHomedir: () => string,
 ): string {
-  const newDir = resolveNewStateDir(effectiveHomedir);
-  if (isFastTestRuntimeEnv(env)) {
-    return newDir;
+  const selected = migrationSelection.getStore();
+  if (selected?.home !== effectiveHomedir()) {
+    return resolveNewStateDir(effectiveHomedir);
   }
-  const hasNew = fs.existsSync(newDir);
-  if (hasNew) {
-    return newDir;
+  if (!selected.active) {
+    throw new Error("Doctor's prepared state-directory selection has expired.");
   }
-  const legacyDirs = resolveLegacyStateDirs(effectiveHomedir);
-  const existingLegacy = legacyDirs.find((dir) => {
-    try {
-      return fs.existsSync(dir);
-    } catch {
-      return false;
-    }
-  });
-  if (existingLegacy) {
-    return existingLegacy;
-  }
-  return newDir;
+  return selected.stateDir;
 }

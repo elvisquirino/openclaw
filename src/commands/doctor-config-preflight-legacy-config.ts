@@ -10,9 +10,10 @@ import {
 } from "../config/io.js";
 import { resolveCanonicalConfigPath, resolveIsConfigReadOnly } from "../config/paths.js";
 import type { ConfigFileSnapshot } from "../config/types.js";
+import { hasErrnoCode } from "../infra/errno.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { resolveLegacyConfigMigrationSources } from "../infra/state-migrations.paths.js";
 import type { PluginMetadataSnapshotScopeRunner } from "../plugins/current-plugin-metadata-snapshot.js";
-import { resolveHomeDir } from "../utils.js";
 import type { ConfigPreflightSnapshotRead } from "./config-preflight-snapshot.js";
 import { shouldSkipPluginValidationForDoctorConfigPreflight } from "./doctor-config-preflight-plugin-index.js";
 import {
@@ -133,11 +134,6 @@ export async function prepareDoctorConfigRecovery(params: {
 
 async function maybeMigrateLegacyConfig(): Promise<string[]> {
   const changes: string[] = [];
-  const home = resolveHomeDir();
-  if (!home) {
-    return changes;
-  }
-
   const targetPath = resolveCanonicalConfigPath();
   const targetDir = path.dirname(targetPath);
   try {
@@ -147,13 +143,24 @@ async function maybeMigrateLegacyConfig(): Promise<string[]> {
     // missing config
   }
 
-  const legacyPath = path.join(home, ".clawdbot", "clawdbot.json");
-  try {
-    await fs.access(legacyPath);
-  } catch {
+  let legacyPath: string | undefined;
+  for (const candidate of resolveLegacyConfigMigrationSources()) {
+    if (candidate === targetPath) {
+      continue;
+    }
+    try {
+      await fs.access(candidate);
+      legacyPath = candidate;
+      break;
+    } catch (error) {
+      if (!hasErrnoCode(error, "ENOENT")) {
+        throw error;
+      }
+    }
+  }
+  if (!legacyPath) {
     return changes;
   }
-
   await fs.mkdir(targetDir, { recursive: true });
   try {
     await fs.copyFile(legacyPath, targetPath, fs.constants.COPYFILE_EXCL);

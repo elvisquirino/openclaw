@@ -3,6 +3,7 @@ import { formatErrorMessage } from "../infra/errors.js";
 import { OpenClawStateOwnershipError } from "../infra/sqlite-lifecycle-errors.js";
 import { isSqliteSchemaMismatchError } from "../infra/sqlite-schema-issues.js";
 import { findStartupMaintenanceRequiredError } from "../infra/startup-maintenance-required.js";
+import { assertCanonicalStatePaths } from "../infra/state-migrations.paths.js";
 import { withPluginMetadataSnapshotScope } from "../plugins/current-plugin-metadata-snapshot.js";
 import {
   withArtifactPreservingStateReads,
@@ -153,6 +154,7 @@ async function readConfigSnapshotWithPreparation(
     });
 
   try {
+    assertCanonicalStatePaths({ ...pathResolution, configPath });
     const raw = await deps.measure(
       "config.snapshot.read.file",
       () => sourceRaw ?? readConfigFileIfPresent(deps, configPath),
