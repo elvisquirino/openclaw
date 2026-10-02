@@ -93,21 +93,18 @@ function createCurrentCronJob(overrides: StoredJob = {}) {
 }
 
 async function writeCronStore(jobs: StoredJob[]) {
-  const ids = jobs.map((job, index) => {
-    const id = job.id ?? job.jobId;
-    return typeof id === "string" || typeof id === "number" ? String(id) : `raw-${index}`;
+  const entries = jobs.map((job, index) => {
+    const rawId = job.id ?? job.jobId;
+    const id =
+      typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : `raw-${index}`;
+    return { job, id };
   });
-  await writeCurrentCronStore(ids.map((id) => createCurrentCronJob({ id })));
+  await writeCurrentCronStore(entries.map(({ id }) => createCurrentCronJob({ id })));
   const db = openOpenClawStateDatabase().db;
-  for (const [index, job] of jobs.entries()) {
+  for (const { job, id } of entries) {
     db.prepare(
       "UPDATE cron_jobs SET job_json = ?, state_json = ? WHERE store_key = ? AND job_id = ?",
-    ).run(
-      JSON.stringify(job),
-      JSON.stringify(job.state ?? {}),
-      cronStoreKey(storePath),
-      ids[index],
-    );
+    ).run(JSON.stringify(job), JSON.stringify(job.state ?? {}), cronStoreKey(storePath), id);
   }
 }
 
