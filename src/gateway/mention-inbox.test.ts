@@ -87,7 +87,10 @@ describe("temporary human mention Inbox", () => {
       const headKey = "notifications.mentions.head";
       const saved = db
         .prepare("SELECT value_json FROM config_machine_state WHERE state_key = ?")
-        .get(headKey)!.value_json;
+        .get(headKey)?.value_json;
+      if (typeof saved !== "string") {
+        throw new Error("Expected persisted Mention Inbox head JSON");
+      }
       db.prepare("UPDATE config_machine_state SET value_json = '{}' WHERE state_key = ?").run(
         headKey,
       );
