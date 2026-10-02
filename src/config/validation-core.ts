@@ -11,13 +11,14 @@ import {
   tryResolveAmbientOwnerAgentId,
 } from "../agents/agent-scope.js";
 import { resolveSandboxDockerEnv, resolveSandboxScope } from "../agents/sandbox/config-contract.js";
+import { collectLegacyToolsBySenderIssues } from "../commands/doctor/shared/legacy-tools-by-sender.js";
 import { getContainerEnvFileEntryIssue } from "../infra/container-env-file.js";
+import { isPathInside } from "../infra/path-guards.js";
 import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.js";
 import {
   hasAvatarUriScheme,
   isAvatarDataUrl,
   isAvatarHttpUrl,
-  isPathWithinRoot,
   isWindowsAbsolutePath,
 } from "../shared/avatar-policy.js";
 import {
@@ -150,7 +151,7 @@ function collectMcpServerNameIssues(raw: unknown): ConfigValidationIssue[] {
 function isWorkspaceAvatarPath(value: string, workspaceDir: string): boolean {
   const workspaceRoot = path.resolve(workspaceDir);
   const resolved = path.resolve(workspaceRoot, value);
-  return isPathWithinRoot(workspaceRoot, resolved);
+  return isPathInside(workspaceRoot, resolved);
 }
 
 function createIdentityAvatarIssue(
@@ -169,9 +170,6 @@ function validateIdentityAvatar(
   env?: NodeJS.ProcessEnv,
 ): ConfigValidationIssue[] {
   const agents = listAgentEntriesWithSource(config);
-  if (agents.length === 0) {
-    return [];
-  }
   const issues: ConfigValidationIssue[] = [];
   for (const { entry, source } of agents) {
     const avatarRaw = entry.identity?.avatar;
@@ -423,6 +421,10 @@ export function validateConfigObjectRaw(
   const mcpServerNameIssues = collectMcpServerNameIssues(opts?.sourceRaw).filter(
     (issue) => !normalizedMcpServerNameIssueKeys.has(JSON.stringify([issue.path, issue.message])),
   );
+  const senderPolicyIssues = collectLegacyToolsBySenderIssues(normalizedRaw);
+  if (senderPolicyIssues.length > 0) {
+    return { ok: false, issues: senderPolicyIssues };
+  }
   const policyIssues = collectUnsupportedSecretRefPolicyIssues(normalizedRaw);
   const validated = OpenClawSchema.safeParse(normalizedRaw);
   if (!validated.success || mcpServerNameIssues.length > 0) {

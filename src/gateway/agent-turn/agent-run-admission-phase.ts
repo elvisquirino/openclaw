@@ -23,9 +23,13 @@ import { resolveIngressWorkspaceOverrideForSessionRun } from "../../agents/spawn
 import { resolveExactSubagentCompletionEvent } from "../../agents/subagents/announce/subagent-announce-handoff.js";
 import type { FollowupCompletionOwner } from "../../agents/subagents/completion/session-followup-completion.types.js";
 import { getLatestLiveSubagentRunByChildSessionKey } from "../../agents/subagents/registry/subagent-registry-read.js";
+import type { SubagentRunRecord } from "../../agents/subagents/registry/subagent-registry.types.js";
+import { isSameSubagentRunOwner } from "../../agents/subagents/registry/subagent-run-generation.js";
+import { captureRequesterCronAuthorityAdmissionAssertion } from "../../agents/subagents/requester-cron-authority.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { assertAgentRunLifecycleGenerationCurrent } from "../../infra/agent-events.js";
 import { claimAgentRunContext } from "../../infra/agent-run-registry.js";
+import { runWithGatewayDetachedWorkContinuation } from "../../process/gateway-work-admission.js";
 import { isSubagentCoordinationInputProvenance } from "../../sessions/input-provenance.js";
 import { registerChatAbortController, resolveAgentRunExpiresAtMs } from "../chat-abort.js";
 import { readInProcessSubagentResume } from "../in-process-subagent-resume.js";
@@ -39,6 +43,7 @@ import {
   readGatewayDedupeEntry,
   setGatewayDedupeEntries,
 } from "./agent-dedupe.js";
+import { canPrepareAgentSessionWorktree } from "./agent-handler-helpers.js";
 import { resolveAgentRunAdmissionModel } from "./agent-run-admission-model.js";
 import {
   createAgentRunAdmissionRevalidator,
@@ -46,6 +51,7 @@ import {
 } from "./agent-run-admission-revalidation.js";
 import type {
   PrepareAgentRunDispatchParams,
+  PreparedAgentRunModelRuntime,
   PreparedAgentRunDispatch,
 } from "./agent-run-admission-types.js";
 import { admitAgentRestartRecovery } from "./agent-run-recovery-admission.js";
@@ -62,6 +68,13 @@ import {
 export async function prepareAgentRunDispatch(
   params: PrepareAgentRunDispatchParams,
 ): Promise<PreparedAgentRunDispatch | undefined> {
+  const assertRequesterCurrent = captureRequesterCronAuthorityAdmissionAssertion({
+    runId: params.runId,
+    sessionKey: params.resolvedSessionKey,
+    sessionId: params.getAdmittedSessionId(),
+    inputProvenance: params.inputProvenance,
+  });
+  assertRequesterCurrent?.();
   const coordination = isSubagentCoordinationInputProvenance(params.inputProvenance);
   const controlUiVisible = !params.suppressVisibleSessionEffects && !coordination;
   const parentResume = readInProcessSubagentResume(params.client?.internal);
@@ -225,6 +238,7 @@ export async function prepareAgentRunDispatch(
     if (params.resolvedSessionKey) {
       claimAgentRunContext(params.runId, {
         ...(params.suppressVisibleSessionEffects ? {} : { sessionKey: params.resolvedSessionKey }),
+        agentId: activeRunAbort.entry.agentId,
         isControlUiVisible: controlUiVisible,
         ...(coordination ? { projectSessionMessages: false, projectSessionActive: false } : {}),
         lifecycleGeneration: params.lifecycleGeneration,
@@ -242,6 +256,7 @@ export async function prepareAgentRunDispatch(
   let preparedModelRuntimeLease: PreparedModelRuntimeLease | undefined;
   let capturedOperator: Awaited<ReturnType<typeof retainGatewayOperatorRun>> | undefined;
   let followupCompletion: FollowupCompletionOwner | undefined;
+  let adoptedParentResume: SubagentRunRecord | undefined;
   let restoreAdmittedRestartRecoveryInterrupted:
     | (() => Promise<MainSessionRecoveryPendingTarget | undefined>)
     | undefined;
@@ -252,6 +267,32 @@ export async function prepareAgentRunDispatch(
     followupCompletion = undefined;
     let pendingRecovery: MainSessionRecoveryPendingTarget | undefined;
     try {
+      const adopted = adoptedParentResume;
+      adoptedParentResume = undefined;
+      if (adopted) {
+        await runWithGatewayDetachedWorkContinuation(async () => {
+          const runtime = await import("../../agents/subagents/registry/subagent-registry.js");
+          const ownsAdoption = () =>
+            isSameSubagentRunOwner(
+              getLatestLiveSubagentRunByChildSessionKey(adopted.childSessionKey),
+              adopted,
+            );
+          if (!ownsAdoption()) {
+            return;
+          }
+          const settled = await runtime.finalizeInterruptedSubagentRun({
+            runId: adopted.runId,
+            expectedEntry: adopted,
+            error: failure ?? "Parent resume admission ended before acceptance.",
+            suppressSessionEffects: true,
+          });
+          if (!settled && ownsAdoption()) {
+            throw new Error(
+              "Adopted parent resume could not be durably settled after admission rejection",
+            );
+          }
+        }, "subagents:unstarted-resume");
+      }
       if (completion) {
         await settleUnstartedGatewayFollowup({
           completion,
@@ -315,6 +356,7 @@ export async function prepareAgentRunDispatch(
     cleanupPreaccept,
   });
   let replyDispatchRuntime: PreparedReplyDispatchRuntime;
+  let preparedModelRuntime: PreparedAgentRunModelRuntime;
   try {
     const publishedRuntime = await loadPublishedGatewayReplyDispatchRuntime({
       agentId: params.activeSessionAgentId,
@@ -328,35 +370,42 @@ export async function prepareAgentRunDispatch(
       throw new Error(`published reply runtime missing for ${params.activeSessionAgentId}`);
     }
     replyDispatchRuntime = publishedRuntime;
-    preparedModelRuntimeLease = await acquireAgentRunPreparedModelRuntime(
-      {
-        config: replyDispatchRuntime.config,
-        agentId: replyDispatchRuntime.agentId,
-        agentDir: replyDispatchRuntime.agentDir,
-        allowGatewaySubagentBinding: true,
-        workspaceDir: workspaceOverride ?? replyDispatchRuntime.workspaceDir,
-        runtimePluginSelections: [
-          {
-            provider: resolvedRuntime.provider,
-            modelId: resolvedRuntime.model,
-            runtime: resolvedRuntime.harness,
-          },
-        ],
-      },
-      {
-        catalogMode: "static",
-        pluginGeneration: replyDispatchRuntime.pluginGeneration,
-        abortSignal: activeRunAbort.controller.signal,
-      },
-    );
-    const runtimeAdmission = revalidateAdmission();
-    if (runtimeAdmission !== true) {
-      return runtimeAdmission;
+    const acquireRuntime = (workspaceDir: string | undefined) =>
+      acquireAgentRunPreparedModelRuntime(
+        {
+          config: replyDispatchRuntime.config,
+          agentId: replyDispatchRuntime.agentId,
+          agentDir: replyDispatchRuntime.agentDir,
+          allowGatewaySubagentBinding: true,
+          workspaceDir: workspaceDir ?? replyDispatchRuntime.workspaceDir,
+          runtimePluginSelections: [
+            {
+              provider: resolvedRuntime.provider,
+              modelId: resolvedRuntime.model,
+              runtime: resolvedRuntime.harness,
+            },
+          ],
+        },
+        {
+          catalogMode: "static",
+          pluginGeneration: replyDispatchRuntime.pluginGeneration,
+          abortSignal: activeRunAbort.controller.signal,
+        },
+      );
+    if (canPrepareAgentSessionWorktree(params.resolvedSessionKey, params.sessionEntry)) {
+      preparedModelRuntime = { acquireWorkspaceModelRuntime: acquireRuntime };
+    } else {
+      preparedModelRuntimeLease = await acquireRuntime(workspaceOverride);
+      preparedModelRuntime = { preparedModelRuntimeLease };
+      const runtimeAdmission = revalidateAdmission();
+      if (runtimeAdmission !== true) {
+        return runtimeAdmission;
+      }
+      replyDispatchRuntime = Object.freeze({
+        ...replyDispatchRuntime,
+        pluginGeneration: preparedModelRuntimeLease.pluginGeneration,
+      });
     }
-    replyDispatchRuntime = Object.freeze({
-      ...replyDispatchRuntime,
-      pluginGeneration: preparedModelRuntimeLease.pluginGeneration,
-    });
   } catch (err) {
     const failedAdmission = revalidateAdmission();
     if (failedAdmission !== true) {
@@ -371,6 +420,9 @@ export async function prepareAgentRunDispatch(
   try {
     subagentAdmission = await prepareGatewaySubagentRun({
       ...params,
+      onParentResumeAdopted: (entry) => {
+        adoptedParentResume = entry;
+      },
       assertResumeAdmissionCurrent: () => {
         params.assertAdmissionCurrent?.();
         const sessionEntry = params.assertGatewayWorkAdmissionAllowed();
@@ -417,6 +469,7 @@ export async function prepareAgentRunDispatch(
   let userTurn: PreparedAgentRunUserTurn;
   const assertInputOwnerCurrent = (terminal = false) => {
     assertInputAdmissionCurrent?.();
+    assertRequesterCurrent?.();
     followupCompletion?.assertCurrent();
     if (followupSuccessor) {
       if (!resumedTaskAdopted) {
@@ -564,8 +617,12 @@ export async function prepareAgentRunDispatch(
       try {
         // All awaited preparation has succeeded. Transfer task ownership before
         // acceptance or dispatch; failed preparation must leave the paused owner intact.
-        adoptParentResume();
+        await adoptParentResume();
         resumedTaskAdopted = true;
+        assertInputOwnerCurrent();
+        params.assertGatewayWorkAdmissionAllowed();
+        activeRunAbort.controller.signal.throwIfAborted();
+        capturedOperator.authority?.assertCurrent();
       } catch (err) {
         const failure = releasePreparedAgentRunUserTurnAfterFailure(userTurn, err);
         return rejectPreaccept(resolveAgentRunAdmissionError(ErrorCodes.UNAVAILABLE, failure));
@@ -573,6 +630,7 @@ export async function prepareAgentRunDispatch(
     }
     followupCompletion?.markAccepted(params.runId);
     params.markAgentRunAccepted(true);
+    adoptedParentResume = undefined;
     setGatewayDedupeEntries({
       dedupe: params.context.dedupe,
       keys: params.agentDedupeKeys,
@@ -636,7 +694,7 @@ export async function prepareAgentRunDispatch(
       resolvedThreadId,
       reactivateSubagent,
       followupCompletion,
-      preparedModelRuntimeLease,
+      ...preparedModelRuntime,
       replyDispatchRuntime,
       unpersistedOffloadedRefs: userTurn.recorder ? [] : params.offloadedRefs,
       userTurn,

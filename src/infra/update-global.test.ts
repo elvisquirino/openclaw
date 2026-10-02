@@ -651,7 +651,7 @@ describe("update global helpers", () => {
         }),
       ).resolves.toEqual({
         manager: "bun",
-        command: "bun",
+        command: process.versions.bun ? process.execPath : "bun",
         globalRoot: bunRoot,
         packageRoot: pkgRoot,
       });
@@ -789,28 +789,28 @@ describe("update global helpers", () => {
       "github:openclaw/openclaw#release/2026.5.12",
     ]);
     expect(globalInstallArgs("bun", "openclaw@latest")).toEqual([
-      "bun",
+      process.versions.bun ? process.execPath : "bun",
       "add",
       "-g",
       "--trust",
       "openclaw@latest",
     ]);
     expect(globalInstallArgs("bun", "/tmp/openclaw-current.tgz")).toEqual([
-      "bun",
+      process.versions.bun ? process.execPath : "bun",
       "add",
       "-g",
       "--trust",
       "openclaw@file:/tmp/openclaw-current.tgz",
     ]);
     expect(globalInstallArgs("bun", "https://example.test/openclaw.tgz")).toEqual([
-      "bun",
+      process.versions.bun ? process.execPath : "bun",
       "add",
       "-g",
       "--trust",
       "openclaw@https://example.test/openclaw.tgz",
     ]);
     expect(globalInstallArgs("bun", "github:openclaw/openclaw#main")).toEqual([
-      "bun",
+      process.versions.bun ? process.execPath : "bun",
       "add",
       "-g",
       "--trust",
@@ -839,14 +839,12 @@ describe("update global helpers", () => {
       await fs.writeFile(path.join(root, ".openclaw-file"), "nope", "utf8");
       await fs.mkdir(path.join(root, "openclaw"), { recursive: true });
 
-      await expect(
-        cleanupGlobalRenameDirs({
-          globalRoot: root,
-          packageName: "openclaw",
-        }),
-      ).resolves.toEqual({
-        removed: [".openclaw-123", ".openclaw-456"],
+      const result = await cleanupGlobalRenameDirs({
+        globalRoot: root,
+        packageName: "openclaw",
       });
+      expect(result.removed.toSorted()).toEqual([".openclaw-123", ".openclaw-456"]);
+      expect((await fs.readdir(root)).toSorted()).toEqual([".openclaw-file", "openclaw"]);
       const packageDirStat = await fs.stat(path.join(root, "openclaw"));
       const markerFileStat = await fs.stat(path.join(root, ".openclaw-file"));
       expect(packageDirStat.isDirectory()).toBe(true);
