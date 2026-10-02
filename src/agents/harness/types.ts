@@ -106,6 +106,7 @@ type AgentHarnessAttemptParamsBase = Omit<
   | "onContextEngineTurnCandidate"
   | "trajectoryRecorder"
   | "inputAttachmentMedia"
+  | "supportsTurnScopedToolRestrictions"
 >;
 /**
  * @deprecated Use AgentHarnessAttemptParamsV2. The optional capability keeps
@@ -501,6 +502,12 @@ type AgentHarnessContract<
   }): AgentHarnessSessionRuntimeOwnership | undefined;
   /** Lets this harness resolve forwarded profiles or its own native credentials. */
   authBootstrap?: "harness";
+  /**
+   * Declares whether this harness supports turn-scoped restrictive tool policies
+   * (`toolsAllow: []`), such as OpenClaw's embedded agent runner. Harnesses that define
+   * tools only at connection/thread boundaries (like Codex app-server) omit this or set false.
+   */
+  supportsTurnScopedToolRestrictions?: boolean;
   runAttempt(params: TAttemptParams): Promise<AgentHarnessAttemptResult>;
   /**
    * Produces one final answer from a settled tool transcript without exposing
@@ -522,6 +529,10 @@ type AgentHarnessContract<
   runIsolatedCompletionV2?(
     params: AgentHarnessIsolatedCompletionParamsV2,
   ): Promise<AgentHarnessIsolatedCompletionResult>;
+  /** Side-effect-free engine selection, shared with this harness's isolated dispatch. */
+  resolveIsolatedCompletionRuntime?(params: {
+    authorizationOwner: AgentHarnessIsolatedCompletionAuthorization["owner"];
+  }): "openclaw" | "self";
 
   runSideQuestion?(params: TSideQuestionParams): Promise<AgentHarnessSideQuestionResult>;
 
@@ -630,3 +641,11 @@ export type RegisteredAgentHarness = {
   harness: AgentHarness;
   ownerPluginId?: string;
 };
+
+/**
+ * Checks whether an agent harness explicitly declares support for turn-scoped
+ * tool restrictions (such as dynamic tool prefiltering).
+ */
+export function harnessSupportsTurnScopedToolRestrictions(harness?: AgentHarness | null): boolean {
+  return harness?.supportsTurnScopedToolRestrictions === true;
+}

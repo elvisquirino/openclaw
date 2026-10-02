@@ -93,6 +93,8 @@ describe("listGatewayMethods", () => {
     "session.suggestions.add",
     "session.suggestions.list",
     "session.suggestions.resolve",
+    "session.reactions.set",
+    "session.reactions.list",
     "session.typing",
     "sessions.companion.ask",
     "sessions.companion.state",
@@ -263,6 +265,10 @@ describe("listGatewayMethods", () => {
       "users.merge",
       "gateway.stop.request",
       "diagnostics.heapSnapshot",
+      "sessions.catalog.import",
+      "backup.status",
+      "storage.locations.list",
+      "storage.locations.probe",
       ...mcpAppExtensionMethods,
     ];
     expect(listGatewayMethods().slice(-expectedSuffix.length)).toEqual(expectedSuffix);
@@ -335,6 +341,10 @@ describe("listGatewayMethods", () => {
       "users.merge",
       "gateway.stop.request",
       "diagnostics.heapSnapshot",
+      "sessions.catalog.import",
+      "backup.status",
+      "storage.locations.list",
+      "storage.locations.probe",
       ...mcpAppExtensionMethods,
     ]);
   });
@@ -535,6 +545,10 @@ describe("listGatewayMethods", () => {
       "users.merge",
       "gateway.stop.request",
       "diagnostics.heapSnapshot",
+      "sessions.catalog.import",
+      "backup.status",
+      "storage.locations.list",
+      "storage.locations.probe",
       ...mcpAppExtensionMethods,
     ];
     expect(coreMethods.slice(-expectedCoreSuffix.length)).toEqual(expectedCoreSuffix);

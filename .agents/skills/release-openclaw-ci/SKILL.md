@@ -178,10 +178,14 @@ Use this with `$release-openclaw-maintainer` and `$openclaw-testing` when a rele
   Source-only edits may reuse the lease; base, dependency, wrapper, or Testbox
   workflow drift requires a fresh lease. Do not set
   `OPENCLAW_TESTBOX_ALLOW_STALE=1` for release evidence.
-- For a committed release candidate, warm the box with
-  `blacksmith testbox warmup ... --ref <candidate-branch-or-sha>`. Do not rely
-  on source sync to overlay committed branch changes onto the workflow's
-  default ref.
+- For a committed release candidate with the supported capsule-aware wrapper,
+  run `node scripts/crabbox-wrapper.mjs run --blacksmith-ref main -- <command>`
+  from that candidate's checkout when using Testbox. The capsule preserves
+  candidate source and frozen dependencies while `main` supplies current
+  admission limits. If the candidate lacks that wrapper contract, use the
+  exact-target release-validation route below with separate Validation and
+  Tooling SHAs. Do not dispatch candidate Testbox workflow refs or borrow
+  another checkout's wrapper.
 
 ## Deferred CI recovery
 
@@ -643,6 +647,16 @@ for publication ordering and prepared/direct recovery.
   (`plugin-clawhub-new.yml`) always wait on `clawhub-plugin-bootstrap`. Approve
   them after the secretless pack jobs finish
   ([first package](../release-openclaw-maintainer/references/first-package.md)).
+- A v2 ClawHub child can stage most packages before one failure makes the
+  awaited parent fail, preventing finalization of the staged siblings.
+  Reconcile the original child's `*-publish-json` artifacts before any
+  republish or parent resume. Use
+  `pnpm release:clawhub-recovery -- --version <version> --reason '<parent failure>' --clawhub-source <isolated pinned ClawHub checkout> <package-publish.json>...`
+  to print exact attempt recovery commands; see the publication recovery guide
+  for the pinned source CLI and authorized execution. Public version 404s do
+  not distinguish staged from missing, and attempt status needs publisher
+  authentication. Parent receipts and live-authority revalidation remain
+  required; recovery does not turn a failed parent into successful evidence.
 - Before the first child dispatch the parent sweeps all selected publishers for a failed earlier parent's
   `waiting`/`queued` children of the same release (ClawHub and core by the
   `parent=<run>/<attempt>` run title; plugin npm by the release SHA, only

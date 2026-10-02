@@ -33,13 +33,10 @@ class AppsPage extends OpenClawLightDomElement {
     sessionKey: this.context?.gateway.snapshot.sessionKey ?? "",
     agentId: this.context?.agentSelection.state.selectedId ?? undefined,
   }));
-  // Re-render on gateway snapshots so pairing and App launch follow current authority.
-  private readonly subscriptions = new SubscriptionsController(this).watchStore(
-    () => this.context?.gateway,
-  );
-  override disconnectedCallback() {
-    this.subscriptions.clear();
-    super.disconnectedCallback();
+
+  constructor() {
+    super();
+    void new SubscriptionsController(this).watchStore(() => this.context?.gateway);
   }
 
   private renderAppConversation(route: NonNullable<ReturnType<typeof mcpAppRouteFromSearch>>) {

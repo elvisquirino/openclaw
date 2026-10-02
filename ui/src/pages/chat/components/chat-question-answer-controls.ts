@@ -69,7 +69,7 @@ export function renderQuestionOptions(props: QuestionOptionsProps) {
             </span>
             ${hasThumbnails ? html`<span class="chat-question-panel__thumbnail" aria-hidden="true">${option.thumbnail?.startsWith("data:") ? html`<img src=${option.thumbnail} alt="" loading="lazy" referrerpolicy="no-referrer" />` : html`<span>◇</span>`}</span>` : nothing}
             <span class="chat-question-panel__option-copy">
-              <strong>${option.label}</strong>
+              <strong class="chat-question-panel__option-label">${option.label}</strong>
               ${option.description ? html`<small>${option.description}</small>` : nothing}
             </span>
             ${index < 9 ? renderKbd(index + 1) : nothing}

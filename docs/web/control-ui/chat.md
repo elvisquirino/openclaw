@@ -38,6 +38,27 @@ In a shared session, another person’s in-progress message stays visible when t
 
 Busy sessions keep the first two people’s preview bubbles in arrival order, including their separate **Draft** lifecycle. Only actively typing people beyond those two appear in the overflow row: its bounded stack shows up to five avatars and one sentence. One, two, or three active overflow collaborators are named naturally; four or five use the first two names and the number of others. With more than five active overflow people, the sentence becomes **Several people are typing…**. Stopping, pausing, sending, or leaving removes a person from that row immediately; the row disappears when nobody remains active there, even while the first two preview bubbles retain drafts. Long names remain visibly part of the sentence, with responsive ellipsis and full accessible names; enlarged text can wrap. The group reserves two text lines. Its first avatar aligns with the preview avatars, and the sentence follows the actual stack width with a small gap. Active typing text uses a subtle shared shimmer; preview **Draft** labels, reduced motion, and forced colors retain legible static text. Editing or pausing does not reorder the two preview slots; a slot opens only when its person sends, leaves, clears, or expires.
 
+## Reactions
+
+Hover a saved prompt or assistant reply and select **Add reaction** beside the
+message actions, or the **+** chip at the end of an existing reaction row. The
+quick palette offers **👍**, **❤️**, **🎉**, **👀**, **🚀**, and **😂**; an emoji
+you already placed shows pressed, and selecting it again removes it. Arrow keys
+move through the palette and Escape closes it.
+
+Select **…** for any other emoji. Type or paste one, or open the system emoji
+picker with **⌃⌘Space** on macOS or **Win+.** on Windows: a complete emoji is
+applied as soon as it lands in the field, so the system picker needs no extra
+keystroke. Anything that is not a single emoji stays in the field with a hint.
+Backspace in an empty field returns to the palette.
+
+Reaction chips appear directly below each message with a count and animate when
+the count changes. Hover a chip to see who reacted, with you listed first.
+Select a chip to add your reaction, or select a pressed chip again to remove
+yours. Viewers can read the chips; adding or toggling requires permission to
+send or suggest in that session. See
+[Multi-user reactions](/concepts/multi-user#reactions) for agent and channel behavior.
+
 ## Session rail and side chat
 
 While you watch a running session, the Gateway shows the model's latest safe preamble immediately as the session headline. When a utility model is available, it can replace that headline with a richer compact status digest after enough activity accumulates. Chat carries the result in a **session rail**: its compact pill shows the live digest, while the expanded rail shows pull requests, elapsed time, and a read-only Side chat thread. The rail can expand once when a run becomes stuck or needs input, and done or failed runs keep a frozen “finished” time based on the final digest. On wide chat panes the expanded rail docks as a 400 px right column; on narrower and mobile layouts it remains an overlay.
@@ -238,6 +259,12 @@ group-targeted New Session remains immediate.
 
 Panes share outbox recovery for the same conversation. Activity in another
 conversation does not restart that recovery; reconnecting checks every saved outbox.
+
+Files remain in the composer while a submitted message waits for attachment
+storage. If you begin another draft during that wait, saving the first message
+removes its unchanged files unless another pending submission still owns them.
+Your newer text and added or replaced files stay in the composer. A storage
+failure keeps those files available for retry.
 
 On wide desktop panes, a compact rail of horizontal marks sits in the transcript's left gutter. Hover for a short message preview, or click a mark to jump to that message. Tab focuses the rail; arrow keys move between marks, Enter or Space jumps, Home and End select the endpoints, and Escape dismisses the preview. At rest, all marks are identical 8 × 2px strokes at 12px spacing. They stay faint; marks for messages currently visible in the transcript light up together as you scroll. Hovering a mark grows it to 32px and lights only that mark in text color, with progressively shorter strokes across three neighbors on either side. The wave and highlighted mark stay in place while the pointer moves onto the preview card. Leaving the rail and card, or pressing Escape, clears the wave. The other marks keep their resting colors. Outside that hover range, widths stay fixed. An empty message preview shows “Preview unavailable.” Each visible user message has a mark, and assistant messages from the same run share one mark. Tool calls, results, and progress alone do not create marks. An assistant mark jumps to the first currently displayed response in its run and previews the latest displayed response. Its identity stays stable as streaming output becomes persisted history, and its current-position highlight follows later response content in the same run. The rail covers loaded history; messages without run identity retain their transcript grouping. Long rails scroll internally within 45% of the viewport height, with fades only at ends that hide more messages. Scrolling the transcript keeps the current mark visible; you can also scroll the rail to explore other messages. The rail stays hidden on mobile, in narrow or short panes, and when your saved message width leaves too little gutter space. A jump briefly tints the target message with a soft background, fading over 1.2 seconds without a border or ring. Reduced motion disables mark transitions and shows the target tint statically for one second.
 

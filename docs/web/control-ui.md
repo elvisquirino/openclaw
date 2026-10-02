@@ -38,6 +38,8 @@ Person hovercards keep their **Recent sessions** selection and order stable whil
 
 Sidebar live narration pauses while the browser tab is hidden and resumes from current activity when you return. The selected chat and pending outbox keep their separately owned subscriptions.
 
+The sidebar’s **Unsent draft** pencil covers saved text, attachments, replies, and goals, including drafts saved in another tab or before a reload, without reopening the conversation. A newer edit or clear always replaces an older saved draft. Incognito conversations never show a saved-draft pencil. Outbox attention badges also count queued messages with attachments that need review once the connection finishes restoring.
+
 With sidebar previews enabled, running sessions show a small, static tool icon beside the progress text on the second row beneath the session name. The title row stays unchanged, and the tool name is available only in the icon’s tooltip and accessible label rather than repeated as visible text. The compact one-row sidebar and team roster add no tool icon or tool text, so tool changes do not shift the list. Tool progress uses only explicitly public progress text from the Gateway, never argument-derived metadata or raw command output. If a call’s progress becomes hidden, its displayed progress is withdrawn. Pending questions and other critical status keep their existing priority. The existing session indicator remains the only activity animation, and tool state clears when its live subscription ends.
 
 Live narration retains up to six visible running background sessions, plus the open session. Recency changes keep that window stable; when a session finishes or leaves the visible rows, the most recent eligible session fills its slot. Reconnecting selects a fresh window.
@@ -80,6 +82,13 @@ Consecutive tool activity shares one expandable log, including when background
 work resumes in a new run. Visible messages, media, and conversation markers
 keep their place and separate logs; live response text and the working indicator
 stay outside the log. Grouping changes only the presentation, not the transcript.
+
+Inter-session messages appear as compact **updates from** activity rows instead
+of chat bubbles. Consecutive updates from the same source share one row; other
+messages and conversation markers keep them separate. Select the row to show
+the original messages and timestamps in one step, or select the source name to
+open that session. Search results and reply navigation reveal the matching
+messages. This changes only presentation, not stored messages or run ownership.
 
 When an incoming message causes an unstarted tool call to be skipped, its card
 and work summary show **Skipped**, including after reloading the conversation.

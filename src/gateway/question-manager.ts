@@ -392,7 +392,10 @@ export class QuestionManager {
     const record = this.get(id);
     const entry = this.entries.get(id);
     if (!record || !entry || entry.record !== record) {
-      throw this.notFound(id);
+      throw new QuestionManagerError(
+        QuestionManagerErrorCodes.NOT_FOUND,
+        `question '${id}' was not found`,
+      );
     }
     return entry;
   }
@@ -472,13 +475,6 @@ export class QuestionManager {
     return new QuestionManagerError(
       QuestionManagerErrorCodes.INVALID_ANSWER,
       `question '${id}' ${reason}`,
-    );
-  }
-
-  private notFound(id: string): QuestionManagerError {
-    return new QuestionManagerError(
-      QuestionManagerErrorCodes.NOT_FOUND,
-      `question '${id}' was not found`,
     );
   }
 

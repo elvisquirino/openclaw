@@ -1,6 +1,7 @@
 // Pane-local search, context menus, selection actions, and presentation resets.
 import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
+import type { MessageReactionSummary } from "../../../../../packages/gateway-protocol/src/index.js";
 import type { ChatPendingInputsPage } from "../../../../../packages/gateway-protocol/src/schema/logs-chat.js";
 import type { ThemeBranding } from "../../../../../packages/gateway-protocol/src/theme.ts";
 import type { GatewayBrowserClient } from "../../../api/gateway.ts";
@@ -19,8 +20,8 @@ import type { SessionLinkTarget } from "../../../components/markdown-session-lin
 import { releaseMarkdownTables } from "../../../components/markdown-tables.ts";
 import type { PersonActivityRouting } from "../../../components/person-activity-link.ts";
 import { t } from "../../../i18n/index.ts";
-import "../../../components/tooltip.ts";
 import { registerChatMessageMetadataEnglish } from "../../../i18n/locales/en-chat-message-metadata.ts";
+import "../../../components/tooltip.ts";
 import type { BoardProvider } from "../../../lib/board/provider.ts";
 import type {
   ChatAttachment,
@@ -31,6 +32,7 @@ import type {
 } from "../../../lib/chat/chat-types.ts";
 import type { EmbedSandboxMode } from "../../../lib/chat/tool-display.ts";
 import type { UiSessionDefaultsHost } from "../../../lib/sessions/session-key.ts";
+import type { PresentationBinding } from "../../../lit/presentation-binding.ts";
 import type { TurnRecapWatch } from "../chat-progress.ts";
 import { resetChatThreadState } from "../chat-thread.ts";
 import type { PluginToolIcons } from "../chat-tool-icon-controller.ts";
@@ -106,6 +108,8 @@ type ReplyMessageAccess = {
 };
 
 export type ChatThreadProps = ChatSendStatusActions & {
+  messageReactions?: ReadonlyMap<string, MessageReactionSummary[]>;
+  onReact?: (messageId: string, emoji: string, remove: boolean) => void;
   branding?: ThemeBranding;
   compactionStatus?: CompactionStatus | null;
   paneId: string;
@@ -115,6 +119,7 @@ export type ChatThreadProps = ChatSendStatusActions & {
   presented?: boolean;
   /** Mounted transcript visibility, independent of which split pane owns input. */
   transcriptVisible?: boolean;
+  transcriptPresentation?: PresentationBinding;
   gatewayClient?: GatewayBrowserClient | null;
   selectedSession: GatewaySessionRow | undefined;
   boardProvider?: BoardProvider;
@@ -275,8 +280,9 @@ export function resetTranscriptSession(paneId: string, owner?: ParentNode): void
   const state = transcriptStates.get(paneId);
   if (state) {
     state.asyncQuestionDrafts = new Map();
-    // Search input belongs to the outgoing transcript. Other fields are pane
-    // preferences or dependency memos and invalidate themselves on new props.
+    // Parked rows must commit fresh bindings on return even when visible props match.
+    state.transcriptRenderDependencies = [];
+    // Search input belongs to the outgoing transcript; pane preferences survive.
     state.searchOpen = false;
     state.searchQuery = "";
     state.searchFocusPending = false;
