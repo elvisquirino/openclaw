@@ -466,7 +466,18 @@ export function bindSqliteWorkerBackend(
             return { ok: true, value: { snapshot, projectionNeedsReconcile } };
           },
           options,
-          { operationLabel: command.type },
+          {
+            operationLabel: command.type,
+            diagnosticContext: {
+              sessionId: scope.sessionId,
+              eventType:
+                command.type === "session.metadata.append" ? command.input.event.type : undefined,
+              messageRole:
+                command.type === "session.metadata.append" && command.input.event.type === "message"
+                  ? command.input.event.message.role
+                  : undefined,
+            },
+          },
         ),
     );
     const outcome = result.value;
