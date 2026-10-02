@@ -485,17 +485,6 @@ function readModelSnapshotState(sessionManager: SessionManager): ModelSnapshotSt
   return { lastSnapshot, latestSwitchTimestamp };
 }
 
-async function appendModelSnapshot(
-  sessionManager: SessionManager,
-  data: ModelSnapshotEntry,
-): Promise<void> {
-  try {
-    await sessionManager.appendCustomEntryAsync(MODEL_SNAPSHOT_CUSTOM_TYPE, data);
-  } catch {
-    // ignore persistence failures
-  }
-}
-
 function isSameModelSnapshot(a: ModelSnapshotEntry, b: ModelSnapshotEntry): boolean {
   return (["provider", "modelApi", "modelId"] as const).every(
     (field) => (a[field] ?? "") === (b[field] ?? ""),
@@ -741,7 +730,14 @@ export async function sanitizeSessionHistory(
     : responsesProviderRepaired;
 
   if (currentSnapshot && (!priorSnapshot || modelChanged)) {
-    await appendModelSnapshot(params.sessionManager, currentSnapshot);
+    try {
+      await params.sessionManager.appendCustomEntryAsync(
+        MODEL_SNAPSHOT_CUSTOM_TYPE,
+        currentSnapshot,
+      );
+    } catch {
+      // ignore persistence failures
+    }
   }
 
   if (!policy.applyGoogleTurnOrdering) {

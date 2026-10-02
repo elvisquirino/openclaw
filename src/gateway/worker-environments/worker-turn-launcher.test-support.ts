@@ -120,12 +120,12 @@ export const reconcileUnchangedLocalWorkspace: WorkerTurnTunnelHandle["reconcile
     };
   };
 
-export function acknowledgeCompletedWorkerTurn(
+export async function acknowledgeCompletedWorkerTurn(
   claim: WorkerSessionTurnClaim,
   transcriptLeafId: string | undefined,
-): SpawnResult {
+): Promise<SpawnResult> {
   const leafId = expectDefined(transcriptLeafId, "persisted worker transcript leaf");
-  createWorkerSessionPlacementGate(placements).updateAckCursors({
+  await createWorkerSessionPlacementGate(placements).updateAckCursors({
     claim,
     transcriptSeq: 2,
     liveSeq: 1,

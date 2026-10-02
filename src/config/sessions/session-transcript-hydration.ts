@@ -1,9 +1,13 @@
 import { isIncognitoSessionKey } from "../../routing/session-key.js";
-import { assertAgentDatabaseTerminalOpenAllowed } from "../../state/openclaw-agent-db-lifecycle.js";
 import { readOpenClawAgentDatabase } from "../../state/openclaw-agent-db-readonly-open.js";
+import { assertAgentDatabaseTerminalOpenAllowed } from "../../state/openclaw-agent-db-terminal.js";
 import { getOpenClawAgentDatabaseIfOpen } from "../../state/openclaw-agent-db.js";
 import { resolveOpenClawAgentSqlitePath } from "../../state/openclaw-agent-db.paths.js";
 import { readSessionTranscriptBoundedActiveContextCore } from "./session-accessor.sqlite-active-context.js";
+import {
+  readLatestSessionTranscriptMessageEvent,
+  readRecentSessionTranscriptActiveEvents,
+} from "./session-accessor.sqlite-active-events.js";
 import { readSessionTranscriptCurrentTurnEntry } from "./session-accessor.sqlite-current-turn.js";
 import { loadTranscriptReadSnapshotSync } from "./session-accessor.sqlite-read.js";
 import {
@@ -129,5 +133,25 @@ export function prepareSessionTranscriptHydration(
       (owner, resolvedScope) =>
         owner.readMaintenance({ target, resolvedScope, admission, request }, signal),
     );
-  return { target, read, readCurrentTurnEntry, readMaintenance, assertCurrent };
+  const readRecentActiveEvents = (maxEvents: number) =>
+    readInOwner(
+      () => readRecentSessionTranscriptActiveEvents(target, maxEvents, { readOnly: true }),
+      (owner, resolvedScope) =>
+        owner.readRecentActiveEvents({ target, resolvedScope, maxEvents, admission }, signal),
+    );
+  const readLatestActiveMessage = () =>
+    readInOwner(
+      () => readLatestSessionTranscriptMessageEvent(target, { readOnly: true }),
+      (owner, resolvedScope) =>
+        owner.readLatestActiveMessage({ target, resolvedScope, admission }, signal),
+    );
+  return {
+    target,
+    read,
+    readCurrentTurnEntry,
+    readMaintenance,
+    readRecentActiveEvents,
+    readLatestActiveMessage,
+    assertCurrent,
+  };
 }

@@ -129,6 +129,7 @@ export class SessionManagerAppend extends SessionManagerSuffixPersistence {
         assertNavigation,
       );
       try {
+        this.assertTranscriptWriteActive();
         assertNavigation();
         if (
           this.getSessionId() !== sessionId ||

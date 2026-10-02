@@ -30,3 +30,31 @@ export type SessionManagerMocks = {
   clearNextUserMessagePersistenceSuppression: UnknownMock;
   removeTrailingEntriesAsync: UnknownMock;
 };
+
+export function resetSessionManagerMocks(
+  sessionManager: SessionManagerMocks,
+  messages: AgentMessage[] = [],
+): void {
+  sessionManager.getSessionTarget.mockReset().mockReturnValue(undefined);
+  sessionManager.getSessionId.mockReset().mockReturnValue("embedded-session");
+  sessionManager.getAppendParentId.mockReset().mockReturnValue(null);
+  sessionManager.getHeader.mockReset().mockReturnValue({ version: 3 });
+  sessionManager.getLeafId.mockReset().mockReturnValue(null);
+  sessionManager.getLeafEntry.mockReset().mockReturnValue(null);
+  sessionManager.getEntry.mockReset().mockReturnValue(undefined);
+  sessionManager.getEntries.mockReset().mockReturnValue([]);
+  sessionManager.getBranch.mockReset().mockReturnValue([]);
+  sessionManager.getBoundaryCount.mockReset().mockReturnValue(0);
+  sessionManager.branchAsync.mockReset();
+  sessionManager.resetLeafAsync.mockReset();
+  sessionManager.clearNextUserMessagePersistenceSuppression.mockReset();
+  sessionManager.buildSessionContext.mockReset().mockReturnValue({ messages });
+  sessionManager.appendThinkingLevelChange.mockReset();
+  sessionManager.appendModelChange.mockReset();
+  sessionManager.appendCustomEntryAsync.mockReset();
+  sessionManager.appendMessageAsync.mockReset();
+  sessionManager.appendSessionInfoAsync.mockReset();
+  sessionManager.appendLabelChangeAsync.mockReset();
+  sessionManager.flushPendingPersistence.mockReset();
+  sessionManager.reloadPersistedTranscriptAsync.mockReset();
+}
