@@ -14,7 +14,6 @@ import {
   type DeferredEmbeddedRunLifecycleManager,
 } from "../../agents/embedded-agent-runner/run/deferred-lifecycle-owner.js";
 import type { RunEmbeddedAgentParams } from "../../agents/embedded-agent-runner/run/params.js";
-import { appendCurrentInboundContext } from "../../agents/embedded-agent-runner/run/runtime-context-prompt.js";
 import { runEmbeddedAgent } from "../../agents/embedded-agent.js";
 import { renderRateLimitOrOverloadedCopy } from "../../agents/failover/user-copy.js";
 import { LiveSessionModelSwitchError } from "../../agents/live-model-switch-error.js";
@@ -47,6 +46,10 @@ import {
   resolveRunAfterAutoFallbackPrimaryProbeRecheck,
 } from "./agent-runner-auto-fallback.js";
 import { handleAgentExecutionError } from "./agent-runner-error-handler.js";
+import {
+  applyMcpAppModelContext,
+  type AppContextTurnParams,
+} from "./agent-runner-execution-mcp-context.js";
 import { recordAgentTurnExecutionOutcome } from "./agent-runner-execution-outcome.js";
 import type {
   AgentTurnCompaction,
@@ -84,12 +87,6 @@ import {
   retainReplyOperationUntilComplete,
 } from "./reply-run-registry.js";
 import { isReplyProfilerEnabled } from "./reply-timing-tracker.js";
-
-type AppContextTurnParams = AgentTurnParams & {
-  mcpAppContextLease?: NonNullable<
-    Awaited<ReturnType<typeof leaseMcpAppModelContextForSessionTurn>>
-  >;
-};
 
 async function executeAgentTurnInternalLoop(
   inputParams: AppContextTurnParams,
@@ -221,46 +218,7 @@ async function executeAgentTurnInternalLoop(
             imageOrder: params.opts?.imageOrder,
           }),
         );
-    const appContext = params.mcpAppContextLease;
-    if (appContext) {
-      appContext.assertCurrent();
-      const existingImages = currentTurnImages.images ?? [];
-      // Project indices only after current-turn image admission owns their order.
-      const input = appContext.project(existingImages.length);
-      params = {
-        ...params,
-        followupRun: {
-          ...params.followupRun,
-          currentInboundContext: appendCurrentInboundContext(
-            params.followupRun.currentInboundContext,
-            [input.context],
-            input.legacyText,
-          ),
-        },
-      };
-      const appended = input.images;
-      if (appended.length) {
-        currentTurnImages = {
-          ...currentTurnImages,
-          images: [...existingImages, ...appended],
-          imageOrder: [
-            ...(currentTurnImages.imageOrder ?? existingImages.map(() => "inline" as const)),
-            ...appended.map(() => "inline" as const),
-          ],
-          ...(currentTurnImages.mediaImageLayout
-            ? {
-                mediaImageLayout: {
-                  ...currentTurnImages.mediaImageLayout,
-                  slots: [
-                    ...currentTurnImages.mediaImageLayout.slots,
-                    ...appended.map(() => ({ kind: "inline" as const })),
-                  ],
-                },
-              }
-            : {}),
-        };
-      }
-    }
+    ({ params, currentTurnImages } = applyMcpAppModelContext(params, currentTurnImages));
   } catch (error) {
     clearAgentRunContext(runId, lifecycleGeneration);
     throw error;

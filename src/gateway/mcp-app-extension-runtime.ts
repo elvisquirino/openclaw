@@ -1,7 +1,5 @@
-import {
-  acquireSessionMcpRuntime,
-  releaseSessionMcpRuntime,
-} from "../agents/agent-bundle-mcp-manager-api.js";
+import { acquireSessionMcpRuntime } from "../agents/agent-bundle-mcp-manager-api.js";
+import { releaseSessionMcpRuntime } from "../agents/agent-bundle-mcp-manager-cleanup.js";
 import { buildBundleMcpToolsFromCatalog } from "../agents/agent-bundle-mcp-materialize.js";
 import { loadSessionMcpConfig } from "../agents/agent-bundle-mcp-runtime-config.js";
 import type { McpCatalogTool, SessionMcpRuntimeLease } from "../agents/agent-bundle-mcp-types.js";

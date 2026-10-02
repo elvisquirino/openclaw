@@ -19,8 +19,10 @@ vi.mock("./server-methods/sessions-files.js", () => ({
 vi.mock("./session-utils.js", () => ({
   loadGatewaySessionEntryReadOnly: () => ({ entry: { sessionId: state.sessionId } }),
 }));
-vi.mock("../agents/agent-bundle-mcp-manager-api.js", () => ({
+vi.mock("../agents/agent-bundle-mcp-manager-cleanup.js", () => ({
   completeDeferredSessionMcpRuntimeRetirement: async () => false,
+}));
+vi.mock("../agents/agent-bundle-mcp-manager-api.js", () => ({
   peekSessionMcpRuntime: () => undefined,
 }));
 vi.mock("./mcp-app-reconstruction.js", () => ({ restoreMcpAppView: async () => undefined }));

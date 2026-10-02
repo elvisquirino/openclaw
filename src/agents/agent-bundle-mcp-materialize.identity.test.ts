@@ -17,8 +17,10 @@ const mocks = vi.hoisted(() => ({
   approve: vi.fn(),
 }));
 vi.mock("./agent-bundle-mcp-manager-api.js", () => ({
-  releaseSessionMcpRuntime: mocks.release,
   peekSessionMcpRuntime: vi.fn(),
+}));
+vi.mock("./agent-bundle-mcp-manager-cleanup.js", () => ({
+  releaseSessionMcpRuntime: mocks.release,
 }));
 vi.mock("./agent-bundle-mcp-requester-connect.js", () => ({
   mergeMcpConnectCatalog: (catalog: unknown) => catalog,

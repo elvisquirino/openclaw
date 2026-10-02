@@ -113,8 +113,10 @@ vi.mock("../../agents/embedded-agent-runner/run-entry.js", async () => {
 });
 
 vi.mock("../../agents/agent-bundle-mcp-manager-api.js", () => ({
-  completeDeferredSessionMcpRuntimeRetirement: async () => false,
   peekSessionMcpRuntime: (params: unknown) => state.peekSessionMcpRuntimeMock(params),
+}));
+vi.mock("../../agents/agent-bundle-mcp-manager-cleanup.js", () => ({
+  completeDeferredSessionMcpRuntimeRetirement: async () => false,
 }));
 
 vi.mock("../../agents/cli-runner.js", () => ({
