@@ -60,34 +60,30 @@ export function materializeDeclarationPackages(root: string, unified: boolean) {
     }
   };
   // Physical package inputs keep relocation independent of absolute junction targets.
-  // The build fence needs this real workspace helper before any package build.
+  // The build fence needs these real workspace helpers before any package build.
   const normalizationCore = path.join(root, "node_modules/@openclaw/normalization-core");
   const normalizationSource = path.resolve("packages/normalization-core");
   const normalizationManifest = JSON.parse(
     fs.readFileSync(path.join(normalizationSource, "package.json"), "utf8"),
   );
   fs.mkdirSync(normalizationCore, { recursive: true });
-  const errorCoercion = fs.readFileSync(
-    path.join(normalizationSource, "src/error-coercion.ts"),
-    "utf8",
-  );
-  fs.writeFileSync(path.join(normalizationCore, "error-coercion.ts"), errorCoercion);
-  fs.writeFileSync(
-    path.join(normalizationCore, "error-coercion.mjs"),
-    stripNodeTypeScriptTypes(errorCoercion),
-  );
+  const normalizationExports: Record<string, { types: string; default: string }> = {};
+  for (const name of ["error-coercion", "record-coerce"]) {
+    const source = fs.readFileSync(path.join(normalizationSource, `src/${name}.ts`), "utf8");
+    fs.writeFileSync(path.join(normalizationCore, `${name}.ts`), source);
+    fs.writeFileSync(path.join(normalizationCore, `${name}.mjs`), stripNodeTypeScriptTypes(source));
+    normalizationExports[`./${name}`] = {
+      types: `./${name}.ts`,
+      default: `./${name}.mjs`,
+    };
+  }
   fs.writeFileSync(
     path.join(normalizationCore, "package.json"),
     JSON.stringify({
       name: normalizationManifest.name,
       version: normalizationManifest.version,
       type: "module",
-      exports: {
-        "./error-coercion": {
-          types: "./error-coercion.ts",
-          default: "./error-coercion.mjs",
-        },
-      },
+      exports: normalizationExports,
     }),
   );
   for (const name of [
