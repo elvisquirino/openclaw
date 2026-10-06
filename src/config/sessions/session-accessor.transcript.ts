@@ -18,6 +18,7 @@ import {
   selectSessionTranscriptTreePathNodes,
 } from "./transcript-tree.js";
 export { persistCompactionBoundaryWithSessionEntrySync } from "./session-accessor.sqlite-compaction.js";
+export { readTranscriptExportSnapshotReadOnlySync } from "./session-accessor.sqlite-export-read.js";
 export { readTranscriptRawDelta } from "./session-accessor.sqlite-delta.js";
 export { resolveSessionKeyBySessionId as resolveTranscriptSessionKeyBySessionId } from "./session-accessor.sqlite-entry.js";
 export { publishTranscriptUpdate } from "./session-accessor.sqlite-events.js";
@@ -34,7 +35,6 @@ export {
   loadTranscriptEvents,
   loadTranscriptEventsSync,
   loadTranscriptHeaderSync,
-  readTranscriptExportSnapshotReadOnlySync,
   readTranscriptStatsBatchReadOnlySync,
   readTranscriptStatsSync,
   validatePreparedAssistantAppendSync,
