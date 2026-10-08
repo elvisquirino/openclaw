@@ -9,7 +9,7 @@ import type { WorkerTaskControl } from "../../infra/worker-task-native-sections.
 import type { WorkerTaskChannel } from "../../infra/worker-task-server.js";
 import { classifyOpenClawAgentDatabaseReadError } from "../../state/openclaw-agent-db-read-error.js";
 import { openOpenClawAgentDatabaseReadOnly } from "../../state/openclaw-agent-db-readonly.js";
-import { prepareTranscriptEventReadQuery } from "./session-accessor.sqlite-read.js";
+import { prepareTranscriptEventReadQuery } from "./session-accessor.sqlite-paged-read.js";
 import { toDatabaseOptions } from "./session-accessor.sqlite-scope.js";
 import { readTranscriptContextVersionInTransaction } from "./session-accessor.sqlite-transcript-state.js";
 import { assertSessionTranscriptHot } from "./session-cold-storage-state.js";

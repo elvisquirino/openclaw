@@ -25,21 +25,23 @@ import type {
 
 // Keep target switching within the existing serialized worker; no read snapshot survives a task.
 const MAX_RETAINED_HISTORY_DATABASES = 64;
-const historyDatabaseScopes = new Map<
-  string,
-  {
-    database: SessionTranscriptHistoryWorkerInput["database"];
-    scope: import("../../state/openclaw-agent-db-readonly-scope.js").OpenClawAgentDatabaseReadOnlyScope;
-  }
->();
+const MAX_RETAINED_EXPORT_DATABASES = 4;
+type RetainedDatabase = {
+  database: SessionTranscriptHistoryWorkerInput["database"];
+  scope: import("../../state/openclaw-agent-db-readonly-scope.js").OpenClawAgentDatabaseReadOnlyScope;
+};
+const historyDatabaseScopes = new Map<string, RetainedDatabase>();
+const exportDatabaseScopes = new Map<string, RetainedDatabase>();
 
 async function withHistoryDatabase<T>(
   database: SessionTranscriptHistoryWorkerInput["database"],
   operationLabel: string,
   operation: () => T | Promise<T>,
+  databaseScopes: Map<string, RetainedDatabase> = historyDatabaseScopes,
+  maxRetainedDatabases = MAX_RETAINED_HISTORY_DATABASES,
 ): Promise<SessionTranscriptWorkerSuccess<T>> {
   const key = JSON.stringify(database);
-  let retained = historyDatabaseScopes.get(key);
+  let retained = databaseScopes.get(key);
   if (!retained) {
     const { OpenClawAgentDatabaseReadOnlyScope } =
       await import("../../state/openclaw-agent-db-readonly-scope.js");
@@ -51,20 +53,21 @@ async function withHistoryDatabase<T>(
       { operation: `sessions.${operationLabel}`, ownerKind: "worker" },
       () => scope.run(database, operation),
     );
-    historyDatabaseScopes.delete(key);
+    databaseScopes.delete(key);
     // Tasks without retained connections must not evict useful connections or retain empty scopes.
     if (!scope.hasRetainedConnection) {
       return { ok: true, value, closedHistoryDatabase: database };
     }
-    historyDatabaseScopes.set(key, retained);
-    if (historyDatabaseScopes.size > MAX_RETAINED_HISTORY_DATABASES) {
-      const oldest = historyDatabaseScopes.entries().next().value!;
+    databaseScopes.set(key, retained);
+    if (databaseScopes.size > maxRetainedDatabases) {
+      const oldest = databaseScopes.entries().next().value!;
       oldest[1].scope.close();
-      historyDatabaseScopes.delete(oldest[0]);
+      databaseScopes.delete(oldest[0]);
       return { ok: true, value, closedHistoryDatabase: oldest[1].database };
     }
     return { ok: true, value };
   } catch (error) {
+    databaseScopes.delete(key);
     // The parent joins worker retirement on failure, including a failed native close.
     try {
       scope.close();
@@ -591,33 +594,21 @@ serveOwnedWorkerTasks(
                   ...request.target,
                   database: request.database,
                 }),
+              historyDatabaseScopes,
+              MAX_RETAINED_HISTORY_DATABASES,
             );
           }
-          if (request.kind === "session-reset-recall") {
-            const { readSessionResetRecallCutoffInProcess } =
-              await import("../../../packages/memory-host-sdk/src/host/session-reset-recall-read.js");
-            return {
-              ok: true,
-              value: { cutoff: readSessionResetRecallCutoffInProcess(request.scope) },
-            };
-          }
-          const { buildSessionEntryInProcess, readSessionEntryResetRecallCutoff } =
-            await import("../../../packages/memory-host-sdk/src/host/session-files.js");
-          const { createSensitiveTextRedactor } = await import("../../logging/redact.js");
-          const entry = await buildSessionEntryInProcess(
-            request.absPath,
-            request.options,
-            createSensitiveTextRedactor(request.redaction),
+          const { runSessionTranscriptExportWorker } =
+            await import("./session-transcript-export-worker.js");
+          return await runSessionTranscriptExportWorker(request, (database, operation) =>
+            withHistoryDatabase(
+              database,
+              request.kind,
+              operation,
+              exportDatabaseScopes,
+              MAX_RETAINED_EXPORT_DATABASES,
+            ),
           );
-          return {
-            ok: true,
-            value: {
-              entry,
-              resetRecallCutoff: entry
-                ? readSessionEntryResetRecallCutoff(entry)
-                : { state: "absent" },
-            },
-          };
         },
       );
     } catch (error) {
@@ -692,9 +683,11 @@ serveOwnedWorkerTasks(
       );
       closeReadOnlyCandidates?.(candidates);
       releaseReadValidation?.(candidates);
-      for (const [identity, retained] of historyDatabaseScopes) {
-        if (!retained.scope.hasRetainedConnection) {
-          historyDatabaseScopes.delete(identity);
+      for (const databaseScopes of [historyDatabaseScopes, exportDatabaseScopes]) {
+        for (const [identity, retained] of databaseScopes) {
+          if (!retained.scope.hasRetainedConnection) {
+            databaseScopes.delete(identity);
+          }
         }
       }
     },
